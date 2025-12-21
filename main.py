@@ -321,7 +321,7 @@ def show_hr_content():
         # =========================================================
         # شروع تب‌بندی‌ها
         # =========================================================
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 رویدادها", "👥لیست جامع پرسنل", "📝 جذب و استخدام", "📊 عملکرد پرسنل", "📈 داشبورد"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 رویدادها", "👥لیست جامع پرسنل", "📝 جذب و استخدام", "📋 وضعیت پرسنل", "📈 داشبورد"])
     
     with tab1:
         st.subheader("📅 رویدادها و برنامه‌های آینده")
@@ -351,7 +351,16 @@ def show_hr_content():
         if st.session_state.personnel_data is not None:
             df = st.session_state.personnel_data.copy()
             df = df[df.columns[::-1]]
-            
+            # ==================================================
+            # 🧹 بخش جدید: اعمال ETL روی لیست پرسنل
+            # ==================================================
+            # 1. حذف فاصله‌های اضافی از نام ستون‌ها
+            df.columns = df.columns.str.strip()
+
+            # 2. تمیزکاری تمام ستون‌های متنی (تبدیل ی/ک و حذف فاصله‌ها)
+            for col in df.select_dtypes(include=['object']).columns:
+                df[col] = df[col].apply(clean_persian_text)
+            # ==================================================
             st.markdown("### 🔍 فیلترها")
             
             col_filter1, col_filter2, col_filter3, col_filter4 = st.columns(4)
@@ -513,7 +522,7 @@ def show_hr_content():
             st.warning("هنوز داده‌ای بارگذاری نشده است.")
     
     with tab4:
-        st.subheader("📊 عملکرد و کارکرد ماهانه پرسنل")
+        st.subheader("📊 گزارش کارکرد و وضعیت ماهانه")
         
         col1, col2 = st.columns([1, 4])
         with col1:
@@ -522,7 +531,6 @@ def show_hr_content():
                 with st.spinner("در حال دریافت اطلاعات از شیت monthlylist..."):
                     load_monthlylist_data()
                 st.success("اطلاعات به‌روزرسانی شد!")
-                st.rerun()
 
         # نمایش آخرین زمان آپدیت
         if st.session_state.last_update_monthlylist:
@@ -863,19 +871,19 @@ def show_hr_content():
                     <div style="
                         background: rgba(255, 255, 255, 0.6); 
                         border-radius: 8px; 
-                        padding: 4px 8px; 
+                        padding: 6px 10px; 
                         display: flex; 
                         justify-content: space-between; 
                         align-items: center; 
                         margin-top: auto;
-                        font-size: 11px; 
+                        font-size: 14px; 
                         color: #444; 
                         font-weight: 600;
                         backdrop-filter: blur(4px);
                         border: 1px solid rgba(255,255,255,0.4);">
-                        <div style="display:flex; align-items:center;">👨 {m_count} <span style="font-size:9px; opacity:0.7; margin-right:2px;">({m_pct}%)</span></div>
+                        <div style="display:flex; align-items:center;">👨 {m_count} <span style="font-size:11px; opacity:0.7; margin-right:2px;">({m_pct}%)</span></div>
                         <div style="width:1px; height:12px; background:#ccc; margin:0 5px;"></div>
-                        <div style="display:flex; align-items:center;">👩 {f_count} <span style="font-size:9px; opacity:0.7; margin-right:2px;">({f_pct}%)</span></div>
+                        <div style="display:flex; align-items:center;">👩 {f_count} <span style="font-size:11px; opacity:0.7; margin-right:2px;">({f_pct}%)</span></div>
                     </div>
                     """
 
@@ -1136,7 +1144,7 @@ def show_hr_content():
                     action_item = "حفظ رویه فعلی و تمرکز بر کاهش زمان استخدام (Time to Hire)."
                     sentiment_color = "#d4edda" # سبز
 
-                with st.expander("🧠 تحلیل و بینش راهبردی", expanded=False):
+                with st.expander("🧠اتاق فکر و بینش", expanded=False):
                     ac1, ac2, ac3 = st.columns([1.5, 1.5, 1])
                     
                     with ac1:
@@ -1289,7 +1297,7 @@ def show_hr_content():
                         ))
                         max_y_ov = df_chart_plot['Interview'].max() if not df_chart_plot.empty else 10
                         fig_ov.update_layout(
-                            title={'text': '📊 عملکرد واحدها: قیف تبدیل متقاضی به استخدام', 'y': 0.95, 'x': 1, 'xanchor': 'right', 'xref': 'paper'},
+                            title={'text': '📊 کارنامه جذب واحدها', 'y': 0.95, 'x': 1, 'xanchor': 'right', 'xref': 'paper'},
                             title_font=dict(size=16, family="Vazirmatn, Arial", color='#033270', weight="bold"),
                             font=dict(family="Vazirmatn, Arial", size=12, color="black"),
                             plot_bgcolor='#ffffff',paper_bgcolor='#ffffff',height=480, barmode='overlay',
@@ -1350,7 +1358,7 @@ def show_hr_content():
                 # --- تحلیل سمت راست (Executive Summary) ---
                 with col_anal_right:
                     if not df_chart_all.empty and best_unit is not None:
-                        with st.expander("📋 گزارش تحلیلی جامع و شاخص‌های کلیدی ", expanded=False):
+                        with st.expander("🎯 تابلوی فرمان شاخص‌ها ", expanded=False):
                             c1, c2, c3, c4 = st.columns(4)
                             
                             # استایل مشترک برای کارت‌ها (ارتفاع ثابت برای تراز شدن خط زیرین)
@@ -1440,14 +1448,14 @@ def show_hr_content():
                     with c_chart_right:
                         h_filter, h_title = st.columns([1, 2])
                         with h_title:
-                            st.markdown("<h3 style='text-align: right; margin: 0; padding-top: 5px; color:#033270; font-size:16px; font-weight:bold; font-family:tahoma;'>⚖️ نمای کلان پراکندگی ریزش</h3>", unsafe_allow_html=True)
+                            st.markdown("<h3 style='text-align: right; margin: 0; padding-top: 5px; color:#033270; font-size:16px; font-weight:bold; font-family:tahoma;'>🗺️نقشه حرارتی ریزش نیرو</h3>", unsafe_allow_html=True)
                         with h_filter:
-                            selected_view = st.selectbox("سطح نمایش:", ["1️⃣ سطح یک: نمای کلان", "2️⃣ سطح دو: دسته‌بندی", "3️⃣ سطح سه: ریز دلایل"], key="lvl_select_final", label_visibility="collapsed")
+                            selected_view = st.selectbox("سطح نمایش:", ["👁️ نمای هلیکوپتری (کلان)", "📂 تفکیک واحدی", "🔍 ریشه‌یابی دقیق"], key="lvl_select_final", label_visibility="collapsed")
                         
                         import textwrap
-                        if "1️⃣" in selected_view:
+                        if "👁️ نمای هلیکوپتری (کلان)" in selected_view:
                             plot_df = churn_df.copy(); y_col = 'وضعیت نهایی'; color_col = 'وضعیت نهایی'; color_scale = None; color_map = {'رد شد': '#c0392b', 'انصراف داد': '#e67e22'} 
-                        elif "2️⃣" in selected_view:
+                        elif "📂 تفکیک واحدی" in selected_view:
                             plot_df = churn_df.copy(); y_col = 'علت_دسته_بندی_شده'; color_col = 'تعداد'; color_scale = 'Reds'; color_map=None
                         else:
                             plot_df = churn_df.copy(); y_col = 'علت نپذیرفتن'; color_col = 'تعداد'; color_scale = 'Oranges'; color_map=None
@@ -1477,7 +1485,7 @@ def show_hr_content():
                     # --- نمودار چهارم (چپ - Pareto) ---
                     with c_chart_left:
                         st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-                        st.markdown("<div style='text-align: right; border-bottom: 2px solid #eee; margin-bottom: 10px;'><span style='color:#033270; font-size:15px; font-weight:bold; font-family:tahoma;'>🔍 تحلیل ریشه‌ای موانع جذب (پارتو)</span></div>", unsafe_allow_html=True)
+                        st.markdown("<div style='text-align: right; border-bottom: 2px solid #eee; margin-bottom: 10px;'><span style='color:#033270; font-size:15px; font-weight:bold; font-family:tahoma;'>🚧گلوگاه‌های اصلی (پارتو)</span></div>", unsafe_allow_html=True)
                         
                         if 'علت_دسته_بندی_شده' in churn_df.columns:
                             pareto_df = churn_df['علت_دسته_بندی_شده'].value_counts().head(5).reset_index()
@@ -1546,7 +1554,7 @@ def show_hr_content():
                                 action = "فرآیند فعلی مطلوب است."
 
                             # 3. نمایش (داخل Expander)
-                            with st.expander("📊 خلاصه وضعیت ریزش )", expanded=False):
+                            with st.expander(" ⚖️ترازنامه رد و انصراف ", expanded=False):
                                 st.markdown(f"""
                                 <div style="font-size: 13px; line-height: 2.2; direction: rtl; text-align: justify; color: #333;">
                                     <div style="background-color: {bg_color}; border-right: 4px solid {border_color}; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
@@ -1595,7 +1603,7 @@ def show_hr_content():
                             elif cumulative_impact >= 50: focus_msg = "🟠 **تمرکز بالا:**"
                             else: focus_msg = "🟡 **پراکندگی دلایل:**"
 
-                            with st.expander("🔍 عارضه‌یابی ریشه‌ای و تجویز راهبردی ", expanded=False):
+                            with st.expander("🩺 عارضه‌یابی ریشه‌ای و تجویز راهبردی ", expanded=False):
                                 st.markdown(f"""
                                 <div style="font-size: 13px; line-height: 2.4; text-align: justify; direction: rtl; color: #333;">
                                     <div style="background-color: #f8f9fa; border-right: 4px solid #d35400; padding: 10px 12px; border-radius: 4px; margin-bottom: 10px;">
