@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 import base64
 import os
 
+
 st.set_page_config(
     page_title="سامانه پیلوت گاز",
     page_icon="assets/sitelogo.png",
@@ -54,69 +55,150 @@ if st.query_params.get("action") == "logout":
 
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw9VrEUyzTpbxeQf7vB8IzZ7BmmsYP65yy-dWGvTCBRLorDc8dCm0f5O3NPQxV9hXn0/exec"
 
-@st.cache_data(ttl=7200)
-def load_from_google_sheet(sheet_name):
+# =========================================================
+# 🛠️ موتور مرکزی ETL (تمیزکاری و استانداردسازی داده‌ها)
+# =========================================================
+
+def global_clean_text(text):
+    """تابع تمیزکاری متون فارسی (استانداردسازی ی/ک و حذف فاصله)"""
+    if pd.isna(text) or text == "" or str(text).lower() in ['nan', 'none', 'null']:
+        return "نامشخص"
+    
+    text = str(text).strip()
+    replacements = {
+        'ي': 'ی', 'ك': 'ک', 'ى': 'ی', 'ة': 'ه',
+        'أ': 'ا', 'إ': 'ا', 'آ': 'ا',
+        '\u200c': ' ', '¬': ''
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+def categorize_rejection_reason(text):
+    """دسته‌بندی هوشمند دلایل رد یا انصراف"""
+    if text == "نامشخص": return "نامشخص"
+    text = text.replace(' ', '') # حذف فاصله برای جستجوی بهتر
+    
+    keywords = {
+        'حقوق': ['حقوق', 'تومان', 'مبلغ', 'پول', 'درامد', 'مزایا', 'پایه'],
+        'مشکل_اضافه_کاری': ['اضافه', 'ساعت', 'شیفت', 'تایم', 'تعطیل', 'پنجشنبه'],
+        'مسیر_و_سرویس': ['ناهار', 'سرویس', 'غذا', 'مسیر', 'راه', 'تردد', 'دور', 'مسافت'],
+        'عدم_مراجعه': ['مراجعه', 'انصراف', 'نیامد', 'پاسخ', 'گوشی', 'تماس', 'جواب'],
+        'عدم_تایید_فنی': ['تایید', 'رد', 'فنی', 'قبول', 'شرایط', 'سن', 'مهارت', 'سابقه'],
+        'محیط_کاری': ['محیط', 'برخورد', 'فرهنگ', 'جو', 'اخلاق']
+    }
+    
+    for category, keys in keywords.items():
+        if any(k in text for k in keys):
+            return category.replace('_', ' ')
+            
+    return 'سایر موارد'
+
+@st.cache_data(ttl=7200, show_spinner=False)
+def fetch_and_clean_data(sheet_name):
+    """
+    این تابع هم داده را می‌گیرد و هم همان لحظه تمیز می‌کند.
+    نتیجه در کش ذخیره می‌شود تا سرعت بالا برود.
+    """
     try:
-        response = requests.get(f"{SCRIPT_URL}?sheet={sheet_name}", timeout=10)
+        response = requests.get(f"{SCRIPT_URL}?sheet={sheet_name}", timeout=15)
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, dict) and 'error' in data:
-                st.error(f"خطا در دریافت داده‌ها: {data['error']}")
+                st.error(f"خطا: {data['error']}")
                 return None
-            if data:
-                return pd.DataFrame(data)
-            else:
-                st.warning(f"شیت {sheet_name} خالی است.")
-                return None
+            
+            if not data:
+                return pd.DataFrame() # برگرداندن جدول خالی به جای None
+
+            # 1. تبدیل به دیتافریم
+            df = pd.DataFrame(data)
+            
+            # 2. تمیزکاری نام ستون‌ها
+            df.columns = df.columns.str.strip()
+            
+            # 3. تمیزکاری سلول‌ها (اعمال روی تمام ستون‌های متنی)
+            # این کار باعث می‌شود دیگر نیازی به clean_text در محیط کاربری نباشد
+            object_cols = df.select_dtypes(include=['object']).columns
+            for col in object_cols:
+                df[col] = df[col].apply(global_clean_text)
+
+            # 4. عملیات اختصاصی بر اساس نوع شیت (Specific Transformations)
+            
+            # الف) اگر شیت استخدام بود: دسته‌بندی دلایل اضافه شود
+            if sheet_name == "employment":
+                if 'علت نپذیرفتن' in df.columns:
+                    df['علت_دسته_بندی_شده'] = df['علت نپذیرفتن'].apply(categorize_rejection_reason)
+                else:
+                    df['علت_دسته_بندی_شده'] = "نامشخص"
+
+            # ب) اگر شیت کارکرد ماهانه بود: مرتب‌سازی ماه‌ها
+            if sheet_name == "monthlylist" and 'ماه' in df.columns:
+                persian_months = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", 
+                                  "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"]
+                df['month_idx'] = df['ماه'].apply(lambda x: persian_months.index(x) if x in persian_months else -1)
+                df = df.sort_values('month_idx', ascending=False).drop(columns=['month_idx'])
+
+            # ج) اگر شیت پرسنل بود: معکوس کردن ستون‌ها (طبق سلیقه شما)
+            if sheet_name == "personnel":
+                df = df[df.columns[::-1]]
+
+            return df
+            
         else:
-            st.error(f"خطا در دریافت داده‌ها: کد وضعیت {response.status_code}")
+            st.error(f"خطا در اتصال: {response.status_code}")
             return None
-    except requests.exceptions.Timeout:
-        st.error("زمان اتصال به Google Sheets به پایان رسید.")
-        return None
     except Exception as e:
-        st.error(f"خطا در اتصال: {str(e)}")
+        st.error(f"خطا سیستمی: {str(e)}")
         return None
 
+# توابع Wrapper برای سازگاری با کد قبلی شما
 def load_personnel_data():
-    df = load_from_google_sheet("personnel")
+    df = fetch_and_clean_data("personnel")
     if df is not None:
         st.session_state.personnel_data = df
         st.session_state.last_update_personnel = datetime.now()
-        return df
-    return None
 
 def load_employee_data():
-    df = load_from_google_sheet("employment")
+    df = fetch_and_clean_data("employment")
     if df is not None:
         st.session_state.employee_data = df
         st.session_state.last_update_employee = datetime.now()
-        return df
-    return None
-# 👇 این تابع را کنار بقیه توابع load_... اضافه کنید
+
 def load_monthlylist_data():
-    # نام شیت در اینجا دقیقاً باید monthlylist باشد (حروف کوچک)
-    df = load_from_google_sheet("monthlylist")
+    df = fetch_and_clean_data("monthlylist")
     if df is not None:
         st.session_state.monthlylist_data = df
         st.session_state.last_update_monthlylist = datetime.now()
-        return df
-    return None
+        # =========================================================
+# ⏰ توابع مدیریت زمان و آپدیت خودکار
+# =========================================================
 
 def should_update_data(last_update):
+    """بررسی می‌کند آیا ۲ ساعت از آخرین آپدیت گذشته است؟"""
     if last_update is None:
         return True
     time_diff = datetime.now() - last_update
     return time_diff >= timedelta(hours=2)
 
 def auto_update_check():
+    """چک کردن تمام دیتاها و آپدیت خودکار در صورت قدیمی بودن"""
+    
+    # 1. بررسی پرسنل
     if should_update_data(st.session_state.last_update_personnel):
-        load_from_google_sheet.clear()
+        # پاک کردن کش تابعی که ساختیم
+        fetch_and_clean_data.clear()
         load_personnel_data()
+        
+    # 2. بررسی استخدام
     if should_update_data(st.session_state.last_update_employee):
-        load_from_google_sheet.clear()
+        fetch_and_clean_data.clear()
         load_employee_data()
 
+    # 3. بررسی گزارش ماهانه (اختیاری)
+    if should_update_data(st.session_state.last_update_monthlylist):
+        fetch_and_clean_data.clear()
+        load_monthlylist_data()
 def login_page():
     load_login_css()
     c1, c2, c3 = st.columns([1, 2, 1])
@@ -243,8 +325,7 @@ def show_home_content():
     </body>
     </html>
     """, height=550)
-    
-    st.markdown("---")
+   
     st.subheader("📊 خلاصه وضعیت سیستم")
     
     col1, col2, col3, col4 = st.columns(4)
@@ -256,427 +337,219 @@ def show_home_content():
         st.markdown('<div class="dashboard-card"><h3 style="color: #033270;">💰 فروش</h3><p style="font-size: 2rem; font-weight: bold; color: #e74c3c;">₽2.5M</p><p style="color: #666;">فروش ماهانه</p></div>', unsafe_allow_html=True)
     with col4:
         st.markdown('<div class="dashboard-card"><h3 style="color: #033270;">📦 انبار</h3><p style="font-size: 2rem; font-weight: bold; color: #f39c12;">567</p><p style="color: #666;">اقلام موجود</p></div>', unsafe_allow_html=True)
-
-def show_hr_content():
-    st.markdown('<h1>👥 مدیریت منابع انسانی</h1>', unsafe_allow_html=True)
-    
-    auto_update_check()
-    
-    if st.session_state.employee_data is not None:
-        # کپی از داده‌ها برای جلوگیری از تغییر در سشن اصلی
-        df_emp = st.session_state.employee_data.copy()
-
 # =========================================================
-        # 🧹 بخش ETL و تمیزکاری داده‌ها (Global Data Cleaning)
-        # =========================================================
-        def clean_persian_text(text):
-            if pd.isna(text): return "نامشخص"
-            text = str(text).strip()
-            
-            # دیکشنری تبدیل کاراکترهای عربی/غیراستاندارد به فارسی استاندارد
-            replacements = {
-                'ي': 'ی',  # ی عربی به فارسی
-                'ك': 'ک',  # ک عربی به فارسی
-                'ى': 'ی',  # الف مقصوره به ی
-                'ة': 'ه',  # تای گرد به ه
-                'أ': 'ا',  # الف با همزه
-                'إ': 'ا',
-                'آ': 'ا',  # (اختیاری: یکسان‌سازی الف‌ها)
-                '\u200c': ' ', # نیم‌فاصله به فاصله (برای یکدستی بهتر در گروه‌بندی)
-                '¬': ' ',      # کاراکترهای مخفی عجیب
+# 🛠️ توابع کمکی لود دیتا (حتما قبل از show_hr_content باشد)
+# =========================================================
+
+def should_update_data(last_update):
+    """بررسی می‌کند آیا ۲ ساعت از آخرین آپدیت گذشته است؟"""
+    if last_update is None:
+        return True
+    time_diff = datetime.now() - last_update
+    return time_diff >= timedelta(hours=12)
+
+def ensure_data_loaded(data_type):
+    """
+    این تابع چک می‌کند اگر داده مورد نیاز موجود نبود یا قدیمی بود، آن را دانلود کند.
+    data_type: 'personnel', 'employee', 'monthly'
+    """
+    if data_type == "personnel":
+        if st.session_state.personnel_data is None or should_update_data(st.session_state.last_update_personnel):
+            with st.spinner("⏳ در حال دریافت لیست پرسنل..."):
+                load_personnel_data()
+                
+    elif data_type == "employee":
+        if st.session_state.employee_data is None or should_update_data(st.session_state.last_update_employee):
+            with st.spinner("⏳ در حال دریافت اطلاعات جذب و استخدام..."):
+                load_employee_data()
+                
+    elif data_type == "monthly":
+        if st.session_state.monthlylist_data is None or should_update_data(st.session_state.last_update_monthlylist):
+            with st.spinner("⏳ در حال دریافت گزارش کارکرد ماهانه..."):
+                load_monthlylist_data()
+def show_hr_content():
+   
+    # ==========================================
+    # 🎨 استایل CSS نهایی (اصلاح فاصله‌ها)
+    # ==========================================
+    st.markdown("""
+        <style>
+        div[data-testid="stVerticalBlock"] {
+            gap: 0.5rem !important;
+            /* 1. تنظیم فاصله کلی صفحه */
+            .block-container {
+                padding-top: 3rem !important;
+                padding-bottom: 2rem !important;
             }
             
-            for old, new in replacements.items():
-                text = text.replace(old, new)
+            /* 2. استایل باکس تیتر */
+            .header-box {
+                background-color: white;
+                width: 100%;
+                padding: 15px 20px;
+                border-radius: 10px;
+                border: 1px solid #E2E8F0;
+                border-bottom: 4px solid #033270;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+                margin-bottom: 15px; /* کاهش فاصله پایین هدر */
+                direction: rtl;
+                text-align: right;
+            }
             
-            return text
+            .header-title {
+                color: #033270;
+                margin: 0;
+                font-size: 26px;
+                font-weight: 900;
+                font-family: 'Tahoma', sans-serif;
+            }
 
-        # لیست ستون‌هایی که باید تمیز شوند
-        target_columns = ['واحد', 'معرف', 'وضعیت نهایی', 'علت نپذیرفتن', 'نام خانوادگی', 'نام', 'زیر گروه']
+           /* 3. خط جداکننده با مارجین منفی (برای حذف فاصله اجباری) */
+            .compact-separator {
+                margin-top: -20px !important;    /* خط را ۲۰ پیکسل بالا می‌کشد */
+                margin-bottom: -20px !important; /* محتوای پایین را ۲۰ پیکسل بالا می‌کشد */
+                border-bottom: 1px solid #E2E8F0;
+                width: 100%;
+                display: block;
+            }
+
+            /* حذف فاصله بالای تیترهای صفحات (مثل لیست جامع پرسنل) */
+            h3, h2, .stHeadingContainer {
+                padding-top: 0px !important;
+                margin-top: 0px !important;
+            }
+            
+            /* حذف فاصله اضافی بین دکمه‌ها و خط */
+            div[data-testid="column"] {
+                margin-bottom: -10px !important;
+            }
+            /* 4. استایل دکمه‌های منو */
+            div.stButton > button[kind="primary"] {
+                background: linear-gradient(135deg, #034870 0%, #164e96 100%) !important;
+                border: none !important;
+                border-radius: 12px !important;
+                padding: 10px 20px !important;
+                box-shadow: 0 4px 10px rgba(3, 50, 112, 0.3) !important;
+                transition: all 0.3s ease !important;
+            }
+            /* اجبار رنگ سفید برای متن دکمه فعال */
+            div.stButton > button[kind="primary"] p {
+                color: #ffffff !important; 
+                font-weight: 900 !important;
+                font-size: 16px !important;
+            }
+            div.stButton > button[kind="primary"] * { color: #ffffff !important; }
+
+            div.stButton > button[kind="primary"]:hover {
+                box-shadow: 0 6px 15px rgba(3, 60, 112, 0.4) !important;
+                transform: translateY(-1px) !important;
+            }
+
+            div.stButton > button[kind="secondary"] {
+                background-color: #E3F2FD !important;
+                border: 1px solid #e2e8f0 !important;
+                border-radius: 12px !important;
+                padding: 10px 20px !important;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.02) !important;
+                transition: all 0.3s ease !important;
+            }
+            div.stButton > button[kind="secondary"] p {
+                color: #033270 !important;
+                font-weight: 600 !important;
+            }
+            div.stButton > button[kind="secondary"] * { color: #033270 !important; }
+
+            div.stButton > button[kind="secondary"]:hover {
+                background-color: #BFDBFE !important;
+                border-color: #033270 !important;
+                transform: translateY(-2px) !important;
+                box-shadow: 0 5px 15px rgba(3, 50, 112, 0.1) !important;
+            }
+
+            /* استایل کارت‌های آماری */
+            .stat-card-new {
+                background: white; border-radius: 10px; padding: 15px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 5px solid #033270;
+                text-align: center; transition: transform 0.2s;
+            }
+            .stat-card-new:hover { transform: scale(1.02); }
+            .stat-value { font-size: 24px; font-weight: 900; color: #033270; }
+            .stat-label { font-size: 13px; color: #64748B; font-weight: bold; }
+        </style>
         
-        # اعمال تمیزکاری روی تمام ستون‌های هدف
-        for col in target_columns:
-            if col in df_emp.columns:
-                df_emp[col] = df_emp[col].apply(clean_persian_text)
-
-        # ---------------------------------------------------------
-        # دسته‌بندی دلایل (بعد از تمیز شدن متن‌ها انجام می‌شود)
-        # ---------------------------------------------------------
-        def categorize_reason(text):
-            # چون متن قبلاً تمیز شده، فقط دسته‌بندی می‌کنیم
-            if text == "نامشخص": return "نامشخص"
-            if any(x in text for x in ['حقوق', 'تومان', 'مبلغ', 'پول', 'درامد', 'بودجه', 'مزایا']): return 'حقوق'
-            if any(x in text for x in ['اضافه', 'ساعت', 'شیفت', 'تایم', 'تعطیل', 'پنجشنبه', 'زمان']): return 'مشکل اضافه کاری'
-            if any(x in text for x in ['ناهار', 'سرویس', 'غذا', 'مسیر', 'راه', 'تردد', 'دور', 'مسافت']): return 'نبود ناهار و سرویس'
-            if any(x in text for x in ['مراجعه', 'انصراف', 'نیامد', 'پاسخ', 'گوشی', 'تماس']): return 'عدم مراجعه'
-            if any(x in text for x in ['تایید', 'رد', 'فنی', 'قبول', 'شرایط', 'سن', 'مهارت', 'سابقه']): return 'عدم تایید'
-            if any(x in text for x in ['محیط', 'برخورد', 'فرهنگ', 'جو']): return 'محیط کاری'
-            return 'سایر موارد' 
-
-        if 'علت نپذیرفتن' in df_emp.columns:
-             df_emp['علت_دسته_بندی_شده'] = df_emp['علت نپذیرفتن'].apply(categorize_reason)
-        else:
-             df_emp['علت_دسته_بندی_شده'] = "نامشخص"
-        
-        # =========================================================
-        # شروع تب‌بندی‌ها
-        # =========================================================
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 رویدادها", "👥لیست جامع پرسنل", "📝 جذب و استخدام", "📋 وضعیت پرسنل", "📈 داشبورد"])
+        <div class="header-box">
+            <div class="header-title">👥 مدیریت منابع انسانی</div>
+        </div>
+    """, unsafe_allow_html=True)
+    # 3. مدیریت وضعیت تب فعال
+    if 'hr_active_tab' not in st.session_state:
+        st.session_state.hr_active_tab = "رویدادها" # پیش‌فرض
+    # نوار دکمه‌ها
+    b1, b2, b3, b4, b5 = st.columns(5)
     
-    with tab1:
-        st.subheader("📅 رویدادها و برنامه‌های آینده")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.info("**جلسه معارفه کارکنان جدید**\n\nتاریخ: 1403/09/25\nساعت: 10:00")
-            st.success("**دوره آموزشی ایمنی**\n\nتاریخ: 1403/09/28\nساعت: 14:00")
-        with col2:
-            st.warning("**بازنگری قراردادها**\n\nتاریخ: 1403/10/01\nساعت: 09:00")
-            st.error("**ارزیابی عملکرد فصلی**\n\nتاریخ: 1403/10/05\nساعت: 11:00")
-    
-    with tab2:
-        st.subheader("🗂️  لیست جامع پرسنل")
+    with b1:
+        type_ = "primary" if st.session_state.hr_active_tab == "رویدادها" else "secondary"
+        if st.button("رویدادها 📅", use_container_width=True, type=type_):
+            st.session_state.hr_active_tab = "رویدادها"
+            st.rerun()
+            
+    with b2:
+        type_ = "primary" if st.session_state.hr_active_tab == "لیست جامع پرسنل" else "secondary"
+        if st.button("لیست جامع پرسنل 🗂️", use_container_width=True, type=type_):
+            st.session_state.hr_active_tab = "لیست جامع پرسنل"
+            st.rerun()
+    with b3:
+        type_ = "primary" if st.session_state.hr_active_tab == "گزارش ماهانه" else "secondary"
+        if st.button("گزارش ماهانه 📊", use_container_width=True, type=type_):
+            st.session_state.hr_active_tab = "گزارش ماهانه"
+            st.rerun()
+            
+    with b4:
+        type_ = "primary" if st.session_state.hr_active_tab == "جذب و استخدام" else "secondary"
+        if st.button("جذب و استخدام 📝", use_container_width=True, type=type_):
+            st.session_state.hr_active_tab = "جذب و استخدام"
+            st.rerun()
+
+    with b5:
+        type_ = "primary" if st.session_state.hr_active_tab == "داشبورد تحلیلی" else "secondary"
+        if st.button("داشبورد تحلیلی 📈", use_container_width=True, type=type_):
+            st.session_state.hr_active_tab = "داشبورد تحلیلی"
+            st.rerun()
+
+    st.markdown("---") 
+
+    # =========================================================
+    # محتوای صفحات (کپی دقیق از کد اصلی شما)
+    # =========================================================
+
+    # بخش ۵: داشبورد تحلیل (شامل تمام نمودارها و تحلیل‌ها)
+    # ---------------------------------------------------------
+    if st.session_state.hr_active_tab == "داشبورد تحلیلی":
+        ensure_data_loaded("employee")
+        ensure_data_loaded("personnel")
         
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("🔄 بارگذاری مجدد", use_container_width=True, key="reload_personnel"):
-                load_from_google_sheet.clear()
-                with st.spinner("در حال بارگذاری..."):
-                    load_personnel_data()
-                st.success("داده‌ها با موفقیت بارگذاری شدند!")
-        
-        if st.session_state.last_update_personnel:
-            shamsi_date = jdatetime.datetime.fromgregorian(datetime=st.session_state.last_update_personnel)
-            st.info(f"آخرین به‌روزرسانی: {shamsi_date.strftime('%Y/%m/%d - %H:%M:%S')}")
-        
-        if st.session_state.personnel_data is not None:
-            df = st.session_state.personnel_data.copy()
-            df = df[df.columns[::-1]]
-            # ==================================================
-            # 🧹 بخش جدید: اعمال ETL روی لیست پرسنل
-            # ==================================================
-            # 1. حذف فاصله‌های اضافی از نام ستون‌ها
-            df.columns = df.columns.str.strip()
-
-            # 2. تمیزکاری تمام ستون‌های متنی (تبدیل ی/ک و حذف فاصله‌ها)
-            for col in df.select_dtypes(include=['object']).columns:
-                df[col] = df[col].apply(clean_persian_text)
-            # ==================================================
-            st.markdown("### 🔍 فیلترها")
-            
-            col_filter1, col_filter2, col_filter3, col_filter4 = st.columns(4)
-            
-            with col_filter1:
-                family_filter = st.text_input("نام خانوادگی", key="family_filter", label_visibility="visible")
-            
-            with col_filter2:
-                personnel_code_filter = st.text_input("شماره پرسنلی", key="personnel_code_filter", label_visibility="visible")
-                       
-            with col_filter3:
-                # پیدا کردن نام صحیح ستون زیرگروه
-                subgroup_col = 'زیر گروه' if 'زیر گروه' in df.columns else ('زیرگروه' if 'زیرگروه' in df.columns else None)
-                
-                if subgroup_col:
-                    # لیست همه زیرگروه‌ها برای نمایش اولیه
-                    all_subgroups = ['همه'] + sorted(df[subgroup_col].dropna().unique().tolist())
-                    subgroup_filter = st.selectbox("زیر گروه", all_subgroups, key="subgroup_filter", label_visibility="visible")
-                else:
-                    subgroup_filter = "همه"
-            with col_filter4:
-                if 'واحد' in df.columns:
-                    if subgroup_filter != "همه" and subgroup_col:
-                        # اگر زیرگروه انتخاب شده بود، فقط واحدهای مربوط به همان زیرگروه را پیدا کن
-                        valid_units_df = df[df[subgroup_col] == subgroup_filter]
-                        available_units = ['همه'] + sorted(valid_units_df['واحد'].dropna().unique().tolist())
-                    else:
-                        # اگر زیرگروه "همه" بود، تمام واحدها را نشان بده
-                        available_units = ['همه'] + sorted(df['واحد'].dropna().unique().tolist())
-                    
-                    unit_filter = st.selectbox("واحد سازمانی", available_units, key="unit_filter", label_visibility="visible")
-                else:
-                    unit_filter = "همه"
-            
-            filtered_df = df.copy()
-            
-            if family_filter and 'نام خانوادگی' in df.columns:
-                filtered_df = filtered_df[filtered_df['نام خانوادگی'].astype(str).str.contains(family_filter, na=False, case=False)]
-            
-            if personnel_code_filter and 'شماره پرسنلی' in df.columns:
-                filtered_df = filtered_df[filtered_df['شماره پرسنلی'].astype(str).str.contains(personnel_code_filter, na=False)]
-            
-            if subgroup_filter != "همه" and 'زیر گروه' in df.columns:
-                filtered_df = filtered_df[filtered_df['زیر گروه'] == subgroup_filter]
-
-            if unit_filter != "همه" and 'واحد' in df.columns:
-                filtered_df = filtered_df[filtered_df['واحد'] == unit_filter]
-            
-
-            
-            st.dataframe(filtered_df, use_container_width=True, height=600, hide_index=True)
-        else:
-            st.warning("هنوز داده‌ای بارگذاری نشده است.")
-    
-    with tab3:
-        st.subheader("📝 جذب و استخدام")
-        
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("🔄 بارگذاری مجدد", use_container_width=True, key="reload_employee"):
-                load_from_google_sheet.clear()
-                with st.spinner("در حال بارگذاری..."):
-                    load_employee_data()
-                st.success("داده‌ها با موفقیت بارگذاری شدند!")
-        
-        if st.session_state.last_update_employee:
-            shamsi_date = jdatetime.datetime.fromgregorian(datetime=st.session_state.last_update_employee)
-            st.info(f"آخرین به‌روزرسانی: {shamsi_date.strftime('%Y/%m/%d - %H:%M:%S')}")
-        
-        if st.session_state.employee_data is not None:
-            # محاسبه تعداد کل
-            total_interviewed = len(df_emp)
-            
-            # --- اصلاح منطق: حذف شرط 'رد شد' ---
-            if 'تاریخ شروع بکار' in df_emp.columns:
-                hired_df = df_emp[
-                    (df_emp['تاریخ شروع بکار'].notna()) & 
-                    (~df_emp['تاریخ شروع بکار'].astype(str).str.contains('عدم استخدام|نامشخص', case=False, na=False))
-                ]
-            else:
-                hired_df = pd.DataFrame()
-            # -------------------------------------
-
-            hired_count = len(hired_df)
-            hired_percentage = round((hired_count / total_interviewed) * 100, 1) if total_interviewed > 0 else 0
-            
-            # (ادامه کدها برای محاسبه most_interviewed_unit و غیره بدون تغییر...)
-            most_interviewed_unit = "نامشخص"
-            most_interviewed_count = 0
-            most_interviewed_percentage = 0
-            if 'واحد' in df_emp.columns:
-                unit_counts = df_emp['واحد'].value_counts()
-                if len(unit_counts) > 0:
-                    most_interviewed_unit = unit_counts.index[0]
-                    most_interviewed_count = unit_counts.iloc[0]
-                    if total_interviewed > 0:
-                        most_interviewed_percentage = round((most_interviewed_count / total_interviewed) * 100, 1)
-            
-            most_hired_unit = "نامشخص"
-            if 'تاریخ شروع بکار' in df_emp.columns and 'واحد' in df_emp.columns:
-                hired_df = df_emp[
-                    (df_emp['تاریخ شروع بکار'].notna()) & 
-                    (~df_emp['تاریخ شروع بکار'].astype(str).str.contains('عدم استخدام|نامشخص', case=False, na=False))
-                ]
-                if len(hired_df) > 0:
-                    hired_units = hired_df['واحد'].value_counts()
-                    if len(hired_units) > 0:
-                        most_hired_unit = hired_units.index[0]
-            
-            gender_percentages = {"مرد": 0, "زن": 0}
-            if 'جنسیت' in df_emp.columns and 'تاریخ شروع بکار' in df_emp.columns:
-                hired_df = df_emp[
-                    (df_emp['تاریخ شروع بکار'].notna()) & 
-                    (~df_emp['تاریخ شروع بکار'].astype(str).str.contains('عدم استخدام|نامشخص', case=False, na=False))
-                ]
-                if len(hired_df) > 0:
-                    gender_counts = hired_df['جنسیت'].value_counts()
-                    total_hired = len(hired_df)
-                    for gender in gender_counts.index:
-                        if gender in gender_percentages:
-                            gender_percentages[gender] = round((gender_counts[gender] / total_hired) * 100, 1)
-            
-            undecided_count = 0
-            undecided_percentage = 0
-            if 'تاریخ شروع بکار' in df_emp.columns:
-                undecided_df = df_emp[
-                    df_emp['تاریخ شروع بکار'].astype(str).str.contains('نامشخص', case=False, na=False)
-                ]
-                undecided_count = len(undecided_df)
-                if total_interviewed > 0:
-                    undecided_percentage = round((undecided_count / total_interviewed) * 100, 1)
-            
-            st.markdown("### 📊 آمار استخدام")
-            
-            col1, col2, col3, col4, col5 = st.columns(5)
-            
-            with col1:
-                st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"><h3 style="color: white !important;">👥 نفرات مصاحبه شده</h3><div class="stat-number">{total_interviewed}</div><div class="stat-label">نفر</div></div>', unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"><h3 style="color: white !important;">🎯 بیشترین مصاحبه</h3><div class="stat-number">{most_interviewed_count}</div><div class="stat-label">{most_interviewed_unit} ({most_interviewed_percentage}%)</div></div>', unsafe_allow_html=True)
-            
-            with col3:
-                st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);"><h3 style="color: white !important;">✅ استخدام شدگان</h3><div class="stat-number">{hired_count}</div><div class="stat-label">{hired_percentage}% از {total_interviewed} نفر</div></div>', unsafe_allow_html=True)
-            
-            with col4:
-                st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);"><h3 style="color: white !important;">🏆 بیشترین استخدام</h3><div class="stat-number">{most_hired_unit}</div><div class="stat-label">مرد: {gender_percentages.get("مرد", 0)}% | زن: {gender_percentages.get("زن", 0)}%</div></div>', unsafe_allow_html=True)
-            
-            with col5:
-                st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);"><h3 style="color: white !important;">❓ نامشخص</h3><div class="stat-number">{undecided_count}</div><div class="stat-label">{undecided_percentage}% از {total_interviewed} نفر</div></div>', unsafe_allow_html=True)
-            
-            st.markdown("---")
-            st.subheader("📊 لیست مصاحبه‌شوندگان")
-            
-            df_emp = df_emp[df_emp.columns[::-1]]
-            st.markdown(f"### 📋 تعداد کل: {len(df_emp)} نفر")
-            st.dataframe(df_emp, use_container_width=True, height=400, hide_index=True)
-        else:
-            st.warning("هنوز داده‌ای بارگذاری نشده است.")
-    
-    with tab4:
-        st.subheader("📊 گزارش کارکرد و وضعیت ماهانه")
-        
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("🔄 دریافت اطلاعات جدید", use_container_width=True, key="btn_reload_monthly"):
-                load_from_google_sheet.clear()
-                with st.spinner("در حال دریافت اطلاعات از شیت monthlylist..."):
-                    load_monthlylist_data()
-                st.success("اطلاعات به‌روزرسانی شد!")
-
-        # نمایش آخرین زمان آپدیت
-        if st.session_state.last_update_monthlylist:
-            shamsi_date = jdatetime.datetime.fromgregorian(datetime=st.session_state.last_update_monthlylist)
-            st.info(f"آخرین آپدیت: {shamsi_date.strftime('%Y/%m/%d - %H:%M:%S')}")
-
-        # نمایش و فیلتر داده‌ها
-        if st.session_state.monthlylist_data is not None:
-            df = st.session_state.monthlylist_data.copy()
-            
-            # 1. حذف فاصله‌های اضافی از نام ستون‌ها
-            df.columns = df.columns.str.strip()
-
-            # 2. تمیزکاری متون
-            def clean_text(text):
-                if pd.isna(text): return "نامشخص"
-                return str(text).strip().replace('ي', 'ی').replace('ك', 'ک')
-            
-            for col in df.select_dtypes(include=['object']).columns:
-                df[col] = df[col].apply(clean_text)
-
-            # ==========================================
-            # 🛠️ منطق مرتب‌سازی ماه‌های شمسی
-            # ==========================================
-            persian_months_order = [
-                "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
-                "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
-            ]
-            
-            # ایجاد یک ستون موقت برای مرتب‌سازی دیتافریم (جدیدترین ماه بالا باشد)
-            if 'ماه' in df.columns:
-                # تابعی که نام ماه را می‌گیرد و ایندکس آن را برمی‌گرداند (برای مرتب‌سازی)
-                df['month_index'] = df['ماه'].apply(
-                    lambda x: persian_months_order.index(x) if x in persian_months_order else -1
-                )
-                # مرتب‌سازی جدول: ماه‌های جدیدتر (ایندکس بالاتر) بالا قرار می‌گیرند
-                df = df.sort_values('month_index', ascending=False).drop(columns=['month_index'])
-
-            # ==========================================
-            # 🔍 بخش فیلترها (۵ ستون در یک ردیف)
-            # ==========================================
-            st.markdown("### 🔍 فیلترهای گزارش")
-            # تغییر به 5 ستون برای جا شدن فیلتر محل خدمت
-            c1, c2, c3, c4, c5 = st.columns(5)
-            
-            # فیلتر ۱: نام خانوادگی
-            with c1:
-                f_family = st.text_input("نام خانوادگی", key="search_family_monthly")
-            
-            # فیلتر ۲: شماره پرسنلی
-            with c2:
-                f_code = st.text_input("شماره پرسنلی", key="search_code_monthly")
-            
-            # فیلتر ۳: ماه (مرتب شده بر اساس تقویم)
-            with c3:
-                if 'ماه' in df.columns:
-                    # پیدا کردن ماه‌های موجود در فایل
-                    available_months = df['ماه'].unique().tolist()
-                    # مرتب‌سازی ماه‌های موجود بر اساس لیست استاندارد شمسی
-                    sorted_months = sorted(
-                        available_months, 
-                        key=lambda x: persian_months_order.index(x) if x in persian_months_order else 99
-                    )
-                    # معکوس می‌کنیم تا ماه آخر (مثلا آبان) اول لیست باشد
-                    sorted_months.reverse()
-                    
-                    f_month = st.selectbox("انتخاب ماه", ['همه'] + sorted_months, key="filter_month_monthly")
-                else:
-                    f_month = "همه"
-                    st.warning("⚠️ ستون 'ماه' یافت نشد.")
-
-            # فیلتر ۴: واحد
-            with c4:
-                if 'واحد' in df.columns:
-                    if f_month != 'همه' and 'ماه' in df.columns:
-                        units = sorted(df[df['ماه'] == f_month]['واحد'].unique().tolist())
-                    else:
-                        units = sorted(df['واحد'].unique().tolist())
-                    f_unit = st.selectbox("واحد سازمانی", ['همه'] + units, key="filter_unit_monthly")
-                else:
-                    f_unit = "همه"
-
-            # فیلتر ۵: محل خدمت (اضافه شد ✅)
-            with c5:
-                if 'محل خدمت' in df.columns:
-                    # فیلتر هوشمند بر اساس انتخاب‌های قبلی
-                    temp_df = df.copy()
-                    if f_month != 'همه' and 'ماه' in temp_df.columns:
-                        temp_df = temp_df[temp_df['ماه'] == f_month]
-                    if f_unit != 'همه' and 'واحد' in temp_df.columns:
-                        temp_df = temp_df[temp_df['واحد'] == f_unit]
-                        
-                    locations = sorted(temp_df['محل خدمت'].unique().tolist())
-                    f_location = st.selectbox("محل خدمت", ['همه'] + locations, key="filter_location_monthly")
-                else:
-                    f_location = "همه"
-            
-            # --- اعمال فیلترها روی جدول ---
-            df_show = df.copy()
-            
-            if f_family and 'نام خانوادگی' in df_show.columns:
-                df_show = df_show[df_show['نام خانوادگی'].str.contains(f_family, case=False, na=False)]
-            
-            if f_code and 'شماره پرسنلی' in df_show.columns:
-                df_show = df_show[df_show['شماره پرسنلی'].astype(str).str.contains(f_code, na=False)]
-            
-            if f_month != "همه" and 'ماه' in df_show.columns:
-                df_show = df_show[df_show['ماه'] == f_month]
-            
-            if f_unit != "همه" and 'واحد' in df_show.columns:
-                df_show = df_show[df_show['واحد'] == f_unit]
-                
-            if f_location != "همه" and 'محل خدمت' in df_show.columns:
-                df_show = df_show[df_show['محل خدمت'] == f_location]
-            
-            # --- چیدمان ستون‌ها (دقیقاً طبق درخواست شما) ---
-            requested_order = [
-                'روزهای کارکرد',
-                 'محل خدمت',
-                'تاریخ استخدام',
-                'تاریخ ترک کار',
-                'وضعیت',
-                'واحد',
-                'ماه',
-                'نام خانوادگی',
-                'نام',
-                'شماره پرسنلی',
-            ]
-            
-            # ۱. انتخاب ستون‌های موجود از لیست درخواستی
-            final_columns = [c for c in requested_order if c in df_show.columns]
-            
-            # ۲. اضافه کردن ستون‌های باقیمانده (اگر ستونی در اکسل هست که در لیست بالا نیست)
-            remaining_cols = [c for c in df_show.columns if c not in final_columns]
-            
-            # ۳. ترکیب نهایی
-            df_final = df_show[final_columns + remaining_cols]
-
-            st.markdown(f"##### تعداد رکورد یافت شده: {len(df_final)}")
-            st.dataframe(df_final, use_container_width=True, height=600, hide_index=True)
-            
-        else:
-            st.info("👈 برای مشاهده اطلاعات، دکمه «دریافت اطلاعات جدید» را بزنید.")
-    with tab5:
-        # تب‌های فرعی برای پرسنل و جذب و استخدام
+        # تب‌های فرعی برای پرسنل و جذب (این‌ها باید باشند چون در کد اصلی بودند)
         sub_tab1, sub_tab2 = st.tabs(["👥 تحلیل پرسنل", "📝 تحلیل جذب و استخدام"])
+        
+        with sub_tab1:
+            st.markdown("#### نمودارهای تحلیلی پرسنل")
+            if st.session_state.personnel_data is not None:
+                df_pers = st.session_state.personnel_data.copy()
+                col1, col2 = st.columns(2)
+                with col1:
+                    if 'واحد' in df_pers.columns:
+                        unit_counts = df_pers['واحد'].value_counts().reset_index()
+                        unit_counts.columns = ['واحد', 'تعداد']
+                        fig1 = px.pie(unit_counts, values='تعداد', names='واحد', title='توزیع پرسنل بر اساس واحد')
+                        fig1.update_traces(textposition='inside', textinfo='percent+label')
+                        st.plotly_chart(fig1, use_container_width=True)
+                with col2:
+                    if 'زیرگروه' in df_pers.columns:
+                        subgroup_counts = df_pers['زیرگروه'].value_counts().reset_index()
+                        subgroup_counts.columns = ['زیرگروه', 'تعداد']
+                        fig2 = px.bar(subgroup_counts, x='تعداد', y='زیرگروه', orientation='h', title='توزیع پرسنل بر اساس زیرگروه')
+                        st.plotly_chart(fig2, use_container_width=True)
+            else: st.warning("داده‌های پرسنل بارگذاری نشده‌اند.")
         
         with sub_tab1:
             st.markdown("#### نمودارهای تحلیلی پرسنل")
@@ -751,7 +624,7 @@ def show_hr_content():
             else:
                 st.warning("داده‌های پرسنل بارگذاری نشده‌اند.")
         
-    with sub_tab2:
+        with sub_tab2:
             st.markdown("### 📊 سامانه هوشمند تحلیل جذب")
             
             if st.session_state.employee_data is not None:
@@ -780,8 +653,7 @@ def show_hr_content():
                 with filter_col2:
                     # فضای خالی یا دکمه رفرش (اختیاری)
                     pass
-                
-                st.markdown("---")
+            
                 # =========================================================
                 # 1. محاسبات پیشرفته (Advanced Calculations)
                 # =========================================================
@@ -1374,7 +1246,6 @@ def show_hr_content():
                             with c4:
                                 st.markdown(f"""<div style="{card_style.format('#2ecc71')}"><span style="font-size: 11px; color: #666;">واحد ستاره</span><div style="font-size: 15px; font-weight: 900; color: #2ecc71; margin: 5px 0;">{best_unit.name}</div><span style="font-size: 10px; color: #27ae60;">نرخ: {best_unit['Rate']}%</span></div>""", unsafe_allow_html=True)
 
-                            st.markdown("---")
                             gap = best_unit['Rate'] - avg_conversion
                             efficiency_status = "مطلوب" if iph < 6 else ("نیازمند بهبود" if iph < 12 else "بحرانی")
                             
@@ -1419,8 +1290,7 @@ def show_hr_content():
                 # 3. بخش نمودارهای تحلیل ریزش (نمودار سوم و چهارم) - اصلاح نهایی و قطعی
                 # =========================================================
                 st.markdown("<div style='margin-top: -30px;'></div>", unsafe_allow_html=True)
-                st.markdown("---") 
-                
+            
                 # 1. آماده‌سازی و فیلتر داده‌ها
                 status_col = df_emp['وضعیت نهایی'] if 'وضعیت نهایی' in df_emp.columns else pd.Series()
                 # تبدیل به رشته و حذف فاصله برای اطمینان از فیلتر صحیح
@@ -1448,7 +1318,7 @@ def show_hr_content():
                     with c_chart_right:
                         h_filter, h_title = st.columns([1, 2])
                         with h_title:
-                            st.markdown("<h3 style='text-align: right; margin: 0; padding-top: 5px; color:#033270; font-size:16px; font-weight:bold; font-family:tahoma;'>🗺️نقشه حرارتی ریزش نیرو</h3>", unsafe_allow_html=True)
+                            st.markdown("<h3 style='text-align: right; margin: 0; padding-top: 5px; color:#033270; font-size:16px; font-weight:bold; font-family:tahoma;'>نقشه حرارتی ریزش نیرو🗺️</h3>", unsafe_allow_html=True)
                         with h_filter:
                             selected_view = st.selectbox("سطح نمایش:", ["👁️ نمای هلیکوپتری (کلان)", "📂 تفکیک واحدی", "🔍 ریشه‌یابی دقیق"], key="lvl_select_final", label_visibility="collapsed")
                         
@@ -1485,7 +1355,7 @@ def show_hr_content():
                     # --- نمودار چهارم (چپ - Pareto) ---
                     with c_chart_left:
                         st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-                        st.markdown("<div style='text-align: right; border-bottom: 2px solid #eee; margin-bottom: 10px;'><span style='color:#033270; font-size:15px; font-weight:bold; font-family:tahoma;'>🚧گلوگاه‌های اصلی (پارتو)</span></div>", unsafe_allow_html=True)
+                        st.markdown("<div style='text-align: right; border-bottom: 2px solid #eee; margin-bottom: 10px;'><span style='color:#033270; font-size:15px; font-weight:bold; font-family:tahoma;'>گلوگاه‌های اصلی (پارتو)🚧</span></div>", unsafe_allow_html=True)
                         
                         if 'علت_دسته_بندی_شده' in churn_df.columns:
                             pareto_df = churn_df['علت_دسته_بندی_شده'].value_counts().head(5).reset_index()
@@ -1624,6 +1494,428 @@ def show_hr_content():
                             st.info("داده‌ای برای تحلیل موجود نیست.")
             else:
                     st.success("✨ داده‌ای برای تحلیل ریزش موجود نیست.")
+                    
+    # ---------------------------------------------------------
+    # بخش 1: رویدادها
+    # ---------------------------------------------------------
+    elif st.session_state.hr_active_tab == "رویدادها":
+        st.subheader("📅 رویدادها و برنامه‌های آینده")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info("**جلسه معارفه کارکنان جدید**\n\nتاریخ: 1403/09/25\nساعت: 10:00")
+            st.success("**دوره آموزشی ایمنی**\n\nتاریخ: 1403/09/28\nساعت: 14:00")
+        with col2:
+            st.warning("**بازنگری قراردادها**\n\nتاریخ: 1403/10/01\nساعت: 09:00")
+            st.error("**ارزیابی عملکرد فصلی**\n\nتاریخ: 1403/10/05\nساعت: 11:00")
+   # ---------------------------------------------------------
+    # بخش 2: لیست پرسنل
+    # ---------------------------------------------------------
+    # ---------------------------------------------------------
+    # بخش 3: لیست جامع پرسنل (با ترتیب ستون‌های درخواستی)
+    # ---------------------------------------------------------
+    elif st.session_state.hr_active_tab == "لیست جامع پرسنل":
+        ensure_data_loaded("personnel")
+        st.subheader("🗂️  لیست جامع پرسنل")
+        
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("🔄 بارگذاری مجدد", use_container_width=True, key="reload_personnel"):
+                fetch_and_clean_data.clear()
+                with st.spinner("در حال بارگذاری..."):
+                    load_personnel_data()
+                st.rerun()
+        
+        if st.session_state.last_update_personnel:
+            shamsi_date = jdatetime.datetime.fromgregorian(datetime=st.session_state.last_update_personnel)
+            st.info(f"آخرین به‌روزرسانی: {shamsi_date.strftime('%Y/%m/%d - %H:%M:%S')}")
+        
+        if st.session_state.personnel_data is not None:
+            df = st.session_state.personnel_data.copy()
+            
+            # 1. تمیزکاری نام ستون‌ها (حذف فاصله و ی/ک عربی)
+            df.columns = [str(col).strip().replace('ي', 'ی').replace('ك', 'ک') for col in df.columns]
+
+            # 2. فیلترها
+            st.markdown("### 🔍 فیلترها")
+            col_filter1, col_filter2, col_filter3, col_filter4 = st.columns(4)
+            
+            with col_filter1: family_filter = st.text_input("نام خانوادگی", key="family_filter")
+            with col_filter2: personnel_code_filter = st.text_input("شماره پرسنلی", key="personnel_code_filter")
+            
+            with col_filter3:
+                subgroup_col = 'زیر گروه' if 'زیر گروه' in df.columns else ('زیرگروه' if 'زیرگروه' in df.columns else None)
+                if subgroup_col:
+                    all_subgroups = ['همه'] + sorted(df[subgroup_col].dropna().unique().tolist())
+                    subgroup_filter = st.selectbox("زیر گروه", all_subgroups, key="subgroup_filter")
+                else: subgroup_filter = "همه"
+            
+            with col_filter4:
+                if 'واحد' in df.columns:
+                    if subgroup_filter != "همه" and subgroup_col:
+                        valid_units_df = df[df[subgroup_col] == subgroup_filter]
+                        available_units = ['همه'] + sorted(valid_units_df['واحد'].dropna().unique().tolist())
+                    else:
+                        available_units = ['همه'] + sorted(df['واحد'].dropna().unique().tolist())
+                    unit_filter = st.selectbox("واحد سازمانی", available_units, key="unit_filter")
+                else: unit_filter = "همه"
+            
+            # 3. اعمال فیلتر
+            filtered_df = df.copy()
+            if family_filter and 'نام خانوادگی' in df.columns: 
+                filtered_df = filtered_df[filtered_df['نام خانوادگی'].astype(str).str.contains(family_filter, na=False, case=False)]
+            if personnel_code_filter and 'شماره پرسنلی' in df.columns: 
+                filtered_df = filtered_df[filtered_df['شماره پرسنلی'].astype(str).str.contains(personnel_code_filter, na=False)]
+            if subgroup_filter != "همه" and subgroup_col: 
+                filtered_df = filtered_df[filtered_df[subgroup_col] == subgroup_filter]
+            if unit_filter != "همه" and 'واحد' in df.columns: 
+                filtered_df = filtered_df[filtered_df['واحد'] == unit_filter]
+            
+            # 4. تنظیم ترتیب ستون‌ها (دقیقاً طبق لیست شما)
+            target_columns_personnel = [
+   
+                "محل خدمت",
+                "میانگین حقوق"
+                "رشته تحصیلی",
+                "وضعیت نظام وظیفه",
+                "تعداد فرزند",
+                "وضعیت تاهل",
+                "جنسیت",
+                "میزان تحصیلات",
+                "آدرس",
+                "تاریخ تولد",
+                "نوع قرارداد",
+                "وضعیت کار",
+                "تاریخ ترک کار",
+                "مدت آخرین قرارداد(ماه)",
+                "تاریخ آخرین قرارداد",
+                "تاریخ استخدام",
+                "زیر گروه",
+                "واحد",
+                "نام خانوادگی",
+                "نام",
+                "شماره پرسنلی",
+            ]
+            
+            # انتخاب ستون‌هایی که در فایل موجود هستند
+            final_cols = [col for col in target_columns_personnel if col in filtered_df.columns]
+            
+            if final_cols:
+                filtered_df = filtered_df[final_cols]
+
+            st.dataframe(filtered_df, use_container_width=True, height=600, hide_index=True)
+        else:
+            st.warning("هنوز داده‌ای بارگذاری نشده است.")
+   # ---------------------------------------------------------
+    # بخش 4: جذب و استخدام (اصلاح نهایی و قطعی)
+    # ---------------------------------------------------------
+    elif st.session_state.hr_active_tab == "جذب و استخدام":
+        ensure_data_loaded("employee")
+        st.subheader("📝 جذب و استخدام")
+        
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("🔄 بارگذاری مجدد", use_container_width=True, key="reload_employee"):
+                fetch_and_clean_data.clear()
+                with st.spinner("در حال بارگذاری..."):
+                    load_employee_data()
+                st.rerun()
+        
+        if st.session_state.last_update_employee:
+            shamsi_date = jdatetime.datetime.fromgregorian(datetime=st.session_state.last_update_employee)
+            st.info(f"آخرین به‌روزرسانی: {shamsi_date.strftime('%Y/%m/%d - %H:%M:%S')}")
+        
+        # --- اصلاح مهم: بررسی وجود داده ---
+        if st.session_state.employee_data is not None:
+            # 1. ابتدا متغیر را می‌سازیم
+            df_emp = st.session_state.employee_data.copy()
+            
+            # 2. تمام محاسبات حتماً باید با یک پله فاصله (Indent) داخل همین if باشند
+            total_interviewed = len(df_emp)
+            
+            if 'تاریخ شروع بکار' in df_emp.columns:
+                hired_df = df_emp[(df_emp['تاریخ شروع بکار'].notna()) & (~df_emp['تاریخ شروع بکار'].astype(str).str.contains('عدم استخدام|نامشخص', case=False, na=False))]
+            else: 
+                hired_df = pd.DataFrame()
+
+            hired_count = len(hired_df)
+            hired_percentage = round((hired_count / total_interviewed) * 100, 1) if total_interviewed > 0 else 0
+            
+            most_interviewed_unit = "نامشخص"; most_interviewed_count = 0; most_interviewed_percentage = 0
+            if 'واحد' in df_emp.columns:
+                unit_counts = df_emp['واحد'].value_counts()
+                if len(unit_counts) > 0:
+                    most_interviewed_unit = unit_counts.index[0]
+                    most_interviewed_count = unit_counts.iloc[0]
+                    if total_interviewed > 0: most_interviewed_percentage = round((most_interviewed_count / total_interviewed) * 100, 1)
+            
+            most_hired_unit = "نامشخص"
+            if not hired_df.empty and 'واحد' in hired_df.columns:
+                hired_units = hired_df['واحد'].value_counts()
+                if len(hired_units) > 0: most_hired_unit = hired_units.index[0]
+            
+            gender_percentages = {"مرد": 0, "زن": 0}
+            if not hired_df.empty and 'جنسیت' in hired_df.columns:
+                gender_counts = hired_df['جنسیت'].value_counts()
+                total_hired_len = len(hired_df)
+                for gender in gender_counts.index:
+                    if gender in gender_percentages: gender_percentages[gender] = round((gender_counts[gender] / total_hired_len) * 100, 1)
+            
+            undecided_count = 0; undecided_percentage = 0
+            if 'تاریخ شروع بکار' in df_emp.columns:
+                undecided_df = df_emp[df_emp['تاریخ شروع بکار'].astype(str).str.contains('نامشخص', case=False, na=False)]
+                undecided_count = len(undecided_df)
+                if total_interviewed > 0: undecided_percentage = round((undecided_count / total_interviewed) * 100, 1)
+            
+            st.markdown("### 📊 آمار استخدام")
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"><h3 style="color: white !important;">👥 نفرات مصاحبه شده</h3><div class="stat-number">{total_interviewed}</div><div class="stat-label">نفر</div></div>', unsafe_allow_html=True)
+            with col2: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"><h3 style="color: white !important;">🎯 بیشترین مصاحبه</h3><div class="stat-number">{most_interviewed_count}</div><div class="stat-label">{most_interviewed_unit} ({most_interviewed_percentage}%)</div></div>', unsafe_allow_html=True)
+            with col3: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);"><h3 style="color: white !important;">✅ استخدام شدگان</h3><div class="stat-number">{hired_count}</div><div class="stat-label">{hired_percentage}% از {total_interviewed} نفر</div></div>', unsafe_allow_html=True)
+            with col4: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);"><h3 style="color: white !important;">🏆 بیشترین استخدام</h3><div class="stat-number">{most_hired_unit}</div><div class="stat-label">مرد: {gender_percentages.get("مرد", 0)}% | زن: {gender_percentages.get("زن", 0)}%</div></div>', unsafe_allow_html=True)
+            with col5: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);"><h3 style="color: white !important;">❓ نامشخص</h3><div class="stat-number">{undecided_count}</div><div class="stat-label">{undecided_percentage}% از {total_interviewed} نفر</div></div>', unsafe_allow_html=True)
+        # ✅✅✅ ایجاد فاصله ۵۰ پیکسلی از بالا
+            st.markdown('<div style="margin-top: 50px;"></div>', unsafe_allow_html=True)
+            # --- نمایش جدول با ترتیب ستون‌های دلخواه ---
+            st.subheader("📊 لیست مصاحبه‌شوندگان")
+            
+            # تعریف ترتیب ستون‌ها
+            desired_columns = [
+                
+                "ماه"
+                "وضعیت نهایی", 
+                "علت_دسته_بندی_شده",
+                "علت نپذیرفتن", 
+                "تاریخ شروع بکار", 
+                "معرف", 
+                "جنسیت", 
+                "واحد", 
+                "نام و نام خانوادگی", 
+
+            ]
+            
+            # فقط ستون‌هایی را انتخاب می‌کنیم که واقعاً در فایل اکسل/شیت موجود باشند (برای جلوگیری از ارور)
+            final_cols = [col for col in desired_columns if col in df_emp.columns]
+            
+            # اگر ستونی پیدا شد، جدول را فیلتر کن، وگرنه کل جدول را نشان بده
+            if final_cols:
+                df_show = df_emp[final_cols]
+            else:
+                df_show = df_emp
+            
+            st.dataframe(df_show, use_container_width=True, height=500, hide_index=True)
+        
+        else:
+            st.warning("هنوز داده‌ای بارگذاری نشده است. لطفاً دکمه بارگذاری را بزنید.")
+   # ---------------------------------------------------------
+    # بخش 5: گزارش ماهانه (اصلاح شده برای مشکل آبان و حروف)
+    # ---------------------------------------------------------
+    elif st.session_state.hr_active_tab == "گزارش ماهانه":
+        ensure_data_loaded("monthly")
+        st.subheader("📊 گزارش کارکرد و وضعیت ماهانه")
+        
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("🔄 دریافت اطلاعات جدید", use_container_width=True, key="btn_reload_monthly"):
+                fetch_and_clean_data.clear()
+                with st.spinner("در حال دریافت اطلاعات..."):
+                    load_monthlylist_data()
+                st.rerun()
+
+        if st.session_state.last_update_monthlylist:
+            shamsi_date = jdatetime.datetime.fromgregorian(datetime=st.session_state.last_update_monthlylist)
+            st.info(f"آخرین آپدیت: {shamsi_date.strftime('%Y/%m/%d - %H:%M:%S')}")
+
+        if st.session_state.monthlylist_data is not None:
+            df = st.session_state.monthlylist_data.copy()
+            
+            # 1. تمیزکاری نام ستون‌ها (حذف فاصله و اصلاح حروف)
+            df.columns = [str(col).strip().replace('ي', 'ی').replace('ك', 'ک') for col in df.columns]
+
+            # 2. تمیزکاری مقادیر سلول‌ها (حل مشکل آبان/ابان و فاصله‌ها)
+            # این تابع تمام مشکلات تایپی رایج را حل می‌کند
+            def clean_all_values(val):
+                if pd.isna(val): return val
+                val = str(val).strip().replace('ي', 'ی').replace('ك', 'ک')
+                # حل مشکل آبان و آذر
+                if val == "ابان": return "آبان"
+                if val == "اذر": return "آذر"
+                return val
+
+            # اعمال تمیزکاری روی کل جدول
+            for col in df.columns:
+                df[col] = df[col].apply(clean_all_values)
+
+            # --- فیلتر هوشمند ماه ---
+            persian_months_order = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"]
+            sorted_months = []
+            default_index = 0
+            
+            if 'ماه' in df.columns:
+                unique_months = df['ماه'].dropna().unique().tolist()
+                valid_months = [m for m in unique_months if m in persian_months_order]
+                sorted_months = sorted(valid_months, key=lambda x: persian_months_order.index(x))
+                if sorted_months:
+                    default_index = len(sorted_months) # انتخاب آخرین ماه
+
+            # --- نمایش فیلترها ---
+            st.markdown("### 🔍 فیلترهای گزارش")
+            c1, c2, c3, c4, c5 = st.columns(5)
+            with c1: f_family = st.text_input("نام خانوادگی", key="sm_fam")
+            with c2: f_code = st.text_input("شماره پرسنلی", key="sm_cod")
+            with c3: f_month = st.selectbox("انتخاب ماه", ['همه'] + sorted_months, index=default_index, key="sm_mon")
+            with c4: 
+                units = sorted(df['واحد'].dropna().unique().tolist()) if 'واحد' in df.columns else []
+                f_unit = st.selectbox("واحد", ['همه'] + units, key="sm_unt")
+            with c5:
+                locs = sorted(df['محل خدمت'].dropna().unique().tolist()) if 'محل خدمت' in df.columns else []
+                f_loc = st.selectbox("محل خدمت", ['همه'] + locs, key="sm_loc")
+
+            # --- اعمال فیلتر ---
+            df_show = df.copy()
+            if f_family and 'نام خانوادگی' in df_show.columns: df_show = df_show[df_show['نام خانوادگی'].astype(str).str.contains(f_family, case=False, na=False)]
+            if f_code and 'شماره پرسنلی' in df_show.columns: df_show = df_show[df_show['شماره پرسنلی'].astype(str).str.contains(f_code, na=False)]
+            
+            if f_month != "همه" and 'ماه' in df_show.columns: df_show = df_show[df_show['ماه'] == f_month]
+            if f_unit != "همه" and 'واحد' in df_show.columns: df_show = df_show[df_show['واحد'] == f_unit]
+            if f_loc != "همه" and 'محل خدمت' in df_show.columns: df_show = df_show[df_show['محل خدمت'] == f_loc]
+
+            st.markdown(f"##### تعداد رکورد: {len(df_show)}")
+
+            # =========================================================
+            # ترتیب ستون‌ها
+            # =========================================================
+            target_columns = [
+                "روز کارکرد",
+                "علت ترک کار",
+                "محل خدمت",
+                "وضعیت",
+                "ماه",
+                "تاریخ استخدام",
+                "واحد",
+                "نام خانوادگی",
+                "نام",
+                "شماره پرسنلی"
+            ]
+            
+            final_cols = [col for col in target_columns if col in df_show.columns]
+            
+            # چک کردن وجود ستون‌ها برای اطمینان
+            if "ماه" not in df_show.columns:
+                st.error("❌ ستون «ماه» در فایل اکسل پیدا نشد!")
+
+            if final_cols:
+                df_show = df_show[final_cols]
+
+            st.dataframe(df_show, use_container_width=True, height=600, hide_index=True)
+        else:
+            st.info("👈 دکمه دریافت اطلاعات را بزنید.")
+
+            # ==========================================
+            # 🔍 بخش فیلترها (۵ ستون در یک ردیف)
+            # ==========================================
+            st.markdown("### 🔍 فیلترهای گزارش")
+            # تغییر به 5 ستون برای جا شدن فیلتر محل خدمت
+            c1, c2, c3, c4, c5 = st.columns(5)
+            
+            # فیلتر ۱: نام خانوادگی
+            with c1:
+                f_family = st.text_input("نام خانوادگی", key="search_family_monthly")
+            
+            # فیلتر ۲: شماره پرسنلی
+            with c2:
+                f_code = st.text_input("شماره پرسنلی", key="search_code_monthly")
+            
+            # فیلتر ۳: ماه (مرتب شده بر اساس تقویم)
+            with c3:
+                if 'ماه' in df.columns:
+                    # پیدا کردن ماه‌های موجود در فایل
+                    available_months = df['ماه'].unique().tolist()
+                    # مرتب‌سازی ماه‌های موجود بر اساس لیست استاندارد شمسی
+                    sorted_months = sorted(
+                        available_months, 
+                        key=lambda x: persian_months_order.index(x) if x in persian_months_order else 99
+                    )
+                    # معکوس می‌کنیم تا ماه آخر (مثلا آبان) اول لیست باشد
+                    sorted_months.reverse()
+                    
+                    f_month = st.selectbox("انتخاب ماه", ['همه'] + sorted_months, key="filter_month_monthly")
+                else:
+                    f_month = "همه"
+                    st.warning("⚠️ ستون 'ماه' یافت نشد.")
+
+            # فیلتر ۴: واحد
+            with c4:
+                if 'واحد' in df.columns:
+                    if f_month != 'همه' and 'ماه' in df.columns:
+                        units = sorted(df[df['ماه'] == f_month]['واحد'].unique().tolist())
+                    else:
+                        units = sorted(df['واحد'].unique().tolist())
+                    f_unit = st.selectbox("واحد سازمانی", ['همه'] + units, key="filter_unit_monthly")
+                else:
+                    f_unit = "همه"
+
+            # فیلتر ۵: محل خدمت (اضافه شد ✅)
+            with c5:
+                if 'محل خدمت' in df.columns:
+                    # فیلتر هوشمند بر اساس انتخاب‌های قبلی
+                    temp_df = df.copy()
+                    if f_month != 'همه' and 'ماه' in temp_df.columns:
+                        temp_df = temp_df[temp_df['ماه'] == f_month]
+                    if f_unit != 'همه' and 'واحد' in temp_df.columns:
+                        temp_df = temp_df[temp_df['واحد'] == f_unit]
+                        
+                    locations = sorted(temp_df['محل خدمت'].unique().tolist())
+                    f_location = st.selectbox("محل خدمت", ['همه'] + locations, key="filter_location_monthly")
+                else:
+                    f_location = "همه"
+            
+            # --- اعمال فیلترها روی جدول ---
+            df_show = df.copy()
+            
+            if f_family and 'نام خانوادگی' in df_show.columns:
+                df_show = df_show[df_show['نام خانوادگی'].str.contains(f_family, case=False, na=False)]
+            
+            if f_code and 'شماره پرسنلی' in df_show.columns:
+                df_show = df_show[df_show['شماره پرسنلی'].astype(str).str.contains(f_code, na=False)]
+            
+            if f_month != "همه" and 'ماه' in df_show.columns:
+                df_show = df_show[df_show['ماه'] == f_month]
+            
+            if f_unit != "همه" and 'واحد' in df_show.columns:
+                df_show = df_show[df_show['واحد'] == f_unit]
+                
+            if f_location != "همه" and 'محل خدمت' in df_show.columns:
+                df_show = df_show[df_show['محل خدمت'] == f_location]
+            
+            # --- چیدمان ستون‌ها (دقیقاً طبق درخواست شما) ---
+            requested_order = [
+                'روزهای کارکرد',
+                 'محل خدمت',
+                'تاریخ استخدام',
+                'تاریخ ترک کار',
+                'وضعیت',
+                'واحد',
+                'ماه',
+                'نام خانوادگی',
+                'نام',
+                'شماره پرسنلی',
+            ]
+            
+            # ۱. انتخاب ستون‌های موجود از لیست درخواستی
+            final_columns = [c for c in requested_order if c in df_show.columns]
+            
+            # ۲. اضافه کردن ستون‌های باقیمانده (اگر ستونی در اکسل هست که در لیست بالا نیست)
+            remaining_cols = [c for c in df_show.columns if c not in final_columns]
+            
+            # ۳. ترکیب نهایی
+            df_final = df_show[final_columns + remaining_cols]
+
+            st.markdown(f"##### تعداد رکورد یافت شده: {len(df_final)}")
+            st.dataframe(df_final, use_container_width=True, height=600, hide_index=True)
+            
+    else:
+            st.info("👈 برای مشاهده اطلاعات، دکمه «دریافت اطلاعات جدید» را بزنید.")
+    # ---------------------------------------------------------
 def show_production_content():
     st.markdown('<h1>🏭 مدیریت تولید</h1>', unsafe_allow_html=True)
     st.info("این بخش برای مدیریت خطوط تولید، کنترل کیفیت، و برنامه‌ریزی تولید است.")

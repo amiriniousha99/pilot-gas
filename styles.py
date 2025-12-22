@@ -365,13 +365,47 @@ def load_dashboard_css():
             padding: 10px 20px;
             color: #333;
         }
-   /* تعیر رنگ موقع انتخاب صفحات داخلی*/
-  .stTabs [aria-selected="true"] {
-            background-color: #1e60aa !important; /* کمی روشن‌تر و نرم‌تر از رنگ سازمانی */
-            color: white !important;
-            border-radius: 8px 8px 0 0;
+        /* 1. تب انتخاب شده (Selected): سرمه‌ای با متن سفید */
+        .stTabs [aria-selected="true"] {
+            background-color: #033270 !important;
+            border-radius: 8px 8px 0 0 !important;
+            border: none !important;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+        }
+        /* سفید کردن متن داخل تب انتخاب شده */
+        .stTabs [aria-selected="true"] p {
+            color: #ffffff !important;
+            font-weight: 900 !important;
+        }
+
+        /* 2. تب انتخاب نشده (Unselected): آبی روشن با متن سرمه‌ای */
+        .stTabs [aria-selected="false"] {
+            background-color: #E3F2FD !important; /* همان رنگ دکمه‌های ثانویه */
+            border-radius: 8px 8px 0 0 !important;
+            border: 1px solid #E2E8F0 !important;
+            border-bottom: none !important;
+            margin-left: 2px !important; /* فاصله ریز بین تب‌ها */
+            transition: all 0.3s ease;
+        }
+        /* سرمه‌ای کردن متن داخل تب انتخاب نشده */
+        .stTabs [aria-selected="false"] p {
+            color: #033270 !important;
+            font-weight: 600 !important;
+        }
+
+        /* 3. هاور روی تب انتخاب نشده (وقتی موس میره روش) */
+        .stTabs [aria-selected="false"]:hover {
+            background-color: #BFDBFE !important; /* آبی کمی تیره‌تر */
+            color: #033270 !important;
+        }
+        .stTabs [aria-selected="false"]:hover p {
+            color: #033270 !important;
         }
         
+        /* حذف خط قرمز پیش‌فرض بالای تب‌های استریم‌لیت */
+        .stTabs [data-baseweb="tab-highlight"] {
+            background-color: transparent !important;
+        }
         /* کاهش ارتفاع کارت‌های استخدام - با فونت درشت‌تر */
         .stat-card {
             padding: 15px !important;
@@ -407,6 +441,7 @@ def load_dashboard_css():
         
         /* متن توضیحات پایین کارت */
         .stat-card .stat-label {
+            color: #212529 !important; /* سفید یخی */
             font-size: 0.95rem !important; /* افزایش سایز فونت توضیحات */
             opacity: 1;
             font-weight: 500;
