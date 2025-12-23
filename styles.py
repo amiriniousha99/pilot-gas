@@ -6,18 +6,19 @@ def load_login_css():
     """استایل‌های مخصوص صفحه ورود"""
     st.markdown("""
     <style>
-        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
-        
+        /* لود کردن فونت بی نازنین از سرور */
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/b-nazanin-font/dist/font-face.css');
+
+        /* اعمال روی کل صفحه */
         html, body, .stApp {
-            font-family: 'Vazirmatn', sans-serif;
-            direction: rtl;
-            text-align: right;
-            height: 100vh;
-            overflow: hidden;
-            margin: 0;
-            padding: 0;
+            font-family: 'B Nazanin', Tahoma, sans-serif !important;
         }
         
+        /* اعمال روی تمام متون، دکمه‌ها و ورودی‌ها */
+        * {
+            font-family: 'B Nazanin', Tahoma, sans-serif !important;
+        }
+
         header[data-testid="stHeader"] {
             display: none;
         }
@@ -60,7 +61,7 @@ def load_login_css():
         .stTextInput label {
             color: white !important;
             margin-bottom: 8px;
-            font-size: 0.9rem;
+            font-size: 1rem;
         }
         
         .stTextInput input {
@@ -69,6 +70,7 @@ def load_login_css():
             border-radius: 8px;
             padding: 10px;
             text-align: center;
+            font-size: 1.1rem;
         }
         
         [data-testid="stFormSubmitButton"] button {
@@ -77,7 +79,7 @@ def load_login_css():
             border: none;
             padding: 10px 0;
             margin-top: 15px;
-            font-size: 1.1rem;
+            font-size: 1.2rem;
             border-radius: 8px;
             width: 100%;
             transition: 0.3s;
@@ -94,17 +96,18 @@ def load_dashboard_css():
     """استایل‌های مخصوص صفحات داخلی (داشبورد)"""
     st.markdown("""
     <style>
-        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+        @import url('https://cdn.jsdelivr.net/gh/rastikerdar/b-nazanin-font/dist/font-face.css');
         @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css');
 
         html, body, .stApp {
-            font-family: 'Vazirmatn', sans-serif;
-            direction: rtl;
-            text-align: right;
-            background-color: #ffffff;
-            overflow: auto;
-            color: #000000;
-        }
+        /* B Nazanin اضافه شد */
+        font-family: 'B Nazanin', 'Vazirmatn', sans-serif !important; 
+        direction: rtl;
+        text-align: right;
+        background-color: #ffffff;
+        overflow: auto;
+        color: #000000;
+    }
 
         p, span, div, label {
             color: #000000;
@@ -149,13 +152,13 @@ def load_dashboard_css():
             top: 0;
             left: 0;
             width: 100%;
-            height: 70px;
+            height: 50px;
             background: linear-gradient(135deg, #033270 0%, #0455a8 100%);
             z-index: 999999;
             display: flex;
             align-items: center;
             justify-content: flex-start;
-            padding: 0 30px;
+            padding: 0 80px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         }
 
@@ -257,75 +260,22 @@ def load_dashboard_css():
             box-shadow: 0 8px 25px rgba(0,0,0,0.12);
         }
 
-        /* استایل جدول */
+       /* ------------------------------------------------------- */
+        /* استایل جدول (فقط تنظیم فونت - رنگ را به پایتون می‌سپاریم) */
+        /* ------------------------------------------------------- */
         div[data-testid="stDataFrame"] {
-            background-color: #ffffff !important;
-            border-radius: 8px;
-            overflow: visible !important;
-            border: 1px solid #dee2e6;
+            width: 100%;
+            font-family: 'B Nazanin', Tahoma, sans-serif !important;
+        }
+
+        /* اجبار فونت روی هدر و سلول‌ها */
+        div[data-testid="stDataFrame"] * {
+            font-family: 'B Nazanin', Tahoma, sans-serif !important;
         }
         
+        /* حذف بوردر پیش‌فرض */
         div[data-testid="stDataFrame"] > div {
-            background-color: #ffffff !important;
-        }
-        
-        div[data-testid="stDataFrame"] > div > div {
-            background-color: #ffffff !important;
-        }
-        
-        div[data-testid="stDataFrame"] div[role="grid"] {
-            background-color: #ffffff !important;
-        }
-        
-        div[data-testid="stDataFrame"] table {
-            background-color: #ffffff !important;
-            width: 100% !important;
-        }
-        
-        div[data-testid="stDataFrame"] thead {
-            background-color: #e9ecef !important;
-        }
-        
-        div[data-testid="stDataFrame"] thead th {
-            background-color: #e9ecef !important;
-            color: #212529 !important;
-            font-weight: bold !important;
-            border-bottom: 2px solid #adb5bd !important;
-            padding: 12px 8px !important;
-            text-align: right !important;
-        }
-        
-        div[data-testid="stDataFrame"] tbody {
-            background-color: #ffffff !important;
-        }
-        
-        div[data-testid="stDataFrame"] tbody td {
-            background-color: #ffffff !important;
-            color: #212529 !important;
-            border-bottom: 1px solid #dee2e6 !important;
-            padding: 10px 8px !important;
-            text-align: right !important;
-        }
-        
-        div[data-testid="stDataFrame"] tbody tr {
-            background-color: #ffffff !important;
-        }
-        
-        div[data-testid="stDataFrame"] tbody tr:hover td {
-            background-color: #f8f9fa !important;
-        }
-        
-        div[data-testid="stDataFrame"] tbody tr:nth-child(even) td {
-            background-color: #f8f9fa !important;
-        }
-        
-        div[data-testid="stDataFrame"] tbody tr:nth-child(even):hover td {
-            background-color: #e9ecef !important;
-        }
-        
-        div[data-testid="stDataFrame"] [data-testid="StyledDataFrameWrapper"] {
-            overflow-x: auto !important;
-            width: 100% !important;
+            border: none !important;
         }
         
         div[data-testid="stElementToolbar"] {

@@ -10,7 +10,25 @@ import plotly.graph_objects as go
 import base64
 import os
 
-
+# این تابع در بالای فایل main.py قرار دارد
+def style_dataframe(df):
+    return df.style.set_properties(**{
+        'background-color': '#F0F8FF',     # آبی ملیح برای سلول‌ها
+        'color': '#000000',
+        'font-family': 'B Nazanin',
+        'border-color': '#ffffff',
+        'text-align': 'right',
+        'font-size': '15px'
+    }).set_table_styles([
+        {'selector': 'th', 'props': [
+            ('background-color', '#2E86C1'), # ✅ آبی روشن (دیگر مشکی نیست)
+            ('color', 'white'),
+            ('font-family', 'B Nazanin'),
+            ('font-size', '16px'),
+            ('text-align', 'center'),
+            ('font-weight', 'bold')
+        ]}
+    ])
 st.set_page_config(
     page_title="سامانه پیلوت گاز",
     page_icon="assets/sitelogo.png",
@@ -41,6 +59,9 @@ if 'last_update_employee' not in st.session_state:
     
 if 'search_triggered' not in st.session_state:
     st.session_state.search_triggered = False
+    
+if 'last_update_hr_global' not in st.session_state:
+    st.session_state.last_update_hr_global = None
 
 target_user = st.query_params.get("user")
 if target_user and target_user in USERS:
@@ -153,23 +174,24 @@ def fetch_and_clean_data(sheet_name):
         return None
 
 # توابع Wrapper برای سازگاری با کد قبلی شما
-def load_personnel_data():
-    df = fetch_and_clean_data("personnel")
-    if df is not None:
+df = fetch_and_clean_data("personnel")
+if df is not None:
         st.session_state.personnel_data = df
         st.session_state.last_update_personnel = datetime.now()
-
+        st.session_state.last_update_hr_global = datetime.now()
 def load_employee_data():
     df = fetch_and_clean_data("employment")
     if df is not None:
         st.session_state.employee_data = df
         st.session_state.last_update_employee = datetime.now()
+        st.session_state.last_update_hr_global = datetime.now()
 
 def load_monthlylist_data():
     df = fetch_and_clean_data("monthlylist")
     if df is not None:
         st.session_state.monthlylist_data = df
         st.session_state.last_update_monthlylist = datetime.now()
+        st.session_state.last_update_hr_global = datetime.now() 
         # =========================================================
 # ⏰ توابع مدیریت زمان و آپدیت خودکار
 # =========================================================
@@ -234,7 +256,30 @@ def login_page():
                     st.error("رمز یا نام کاربری اشتباه است!")
 
 def show_home_content():
-    st.markdown('<h1>🏠 خوش آمدید به سامانه مدیریت پیلوت گاز</h1>', unsafe_allow_html=True)
+    # ==========================================
+    # 🎨 تنظیمات: اسلایدر با ارتفاع کمتر (350 پیکسل)
+    # ==========================================
+    st.markdown("""
+        <style>
+            /* تنظیم فاصله کانتینر اصلی (همان تنظیماتی که برای هماهنگی با دکمه‌ها داشتید) */
+            [data-testid="block-container"] {
+                padding-left: 60px !important;   /* این عدد را طبق آخرین تغییرتان نگه دارید */
+                padding-right: 60px !important;  
+                padding-top: 90px !important;
+                max-width: 100% !important;
+            }
+
+            iframe {
+                width: 100% !important;
+                border: none !important;
+                display: block !important;
+            }
+            
+            div[data-testid="stVerticalBlock"] {
+                gap: 0 !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
     # 1. تابع کمکی برای تبدیل عکس به کد
     def get_base64_image(image_path):
         try:
@@ -325,7 +370,7 @@ def show_home_content():
     </body>
     </html>
     """, height=550)
-   
+    st.markdown('<h1>🏠 خوش آمدید به سامانه مدیریت پیلوت گاز</h1>', unsafe_allow_html=True)
     st.subheader("📊 خلاصه وضعیت سیستم")
     
     col1, col2, col3, col4 = st.columns(4)
@@ -355,7 +400,7 @@ def ensure_data_loaded(data_type):
     """
     if data_type == "personnel":
         if st.session_state.personnel_data is None or should_update_data(st.session_state.last_update_personnel):
-            with st.spinner("⏳ در حال دریافت لیست پرسنل..."):
+            with st.spinner("⏳ در حال دریافت بانک اطلاعات سرمایه ..."):
                 load_personnel_data()
                 
     elif data_type == "employee":
@@ -365,122 +410,305 @@ def ensure_data_loaded(data_type):
                 
     elif data_type == "monthly":
         if st.session_state.monthlylist_data is None or should_update_data(st.session_state.last_update_monthlylist):
-            with st.spinner("⏳ در حال دریافت گزارش کارکرد ماهانه..."):
+            with st.spinner("⏳ در حال دریافت گزارش کارکرد ماهیانه..."):
                 load_monthlylist_data()
 def show_hr_content():
-   
+   # محاسبه تاریخ و زمان فعلی
+    now = datetime.now()
+    shamsi_now = jdatetime.datetime.fromgregorian(datetime=now)
+    today_date = shamsi_now.strftime('%Y/%m/%d')
+    now_time = shamsi_now.strftime('%H:%M')
+    
     # ==========================================
-    # 🎨 استایل CSS نهایی (اصلاح فاصله‌ها)
+    # 🎨 استایل CSS مدرن برای هدر و دکمه آپدیت
     # ==========================================
     st.markdown("""
         <style>
         div[data-testid="stVerticalBlock"] {
             gap: 0.5rem !important;
-            /* 1. تنظیم فاصله کلی صفحه */
-            .block-container {
-                padding-top: 3rem !important;
-                padding-bottom: 2rem !important;
-            }
-            
-            /* 2. استایل باکس تیتر */
-            .header-box {
-                background-color: white;
-                width: 100%;
-                padding: 15px 20px;
-                border-radius: 10px;
-                border: 1px solid #E2E8F0;
-                border-bottom: 4px solid #033270;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-                margin-bottom: 15px; /* کاهش فاصله پایین هدر */
-                direction: rtl;
-                text-align: right;
-            }
-            
-            .header-title {
-                color: #033270;
-                margin: 0;
-                font-size: 26px;
-                font-weight: 900;
-                font-family: 'Tahoma', sans-serif;
-            }
-
-           /* 3. خط جداکننده با مارجین منفی (برای حذف فاصله اجباری) */
-            .compact-separator {
-                margin-top: -20px !important;    /* خط را ۲۰ پیکسل بالا می‌کشد */
-                margin-bottom: -20px !important; /* محتوای پایین را ۲۰ پیکسل بالا می‌کشد */
-                border-bottom: 1px solid #E2E8F0;
-                width: 100%;
-                display: block;
-            }
-
-            /* حذف فاصله بالای تیترهای صفحات (مثل لیست جامع پرسنل) */
-            h3, h2, .stHeadingContainer {
-                padding-top: 0px !important;
-                margin-top: 0px !important;
-            }
-            
-            /* حذف فاصله اضافی بین دکمه‌ها و خط */
-            div[data-testid="column"] {
-                margin-bottom: -10px !important;
-            }
-            /* 4. استایل دکمه‌های منو */
-            div.stButton > button[kind="primary"] {
-                background: linear-gradient(135deg, #034870 0%, #164e96 100%) !important;
-                border: none !important;
-                border-radius: 12px !important;
-                padding: 10px 20px !important;
-                box-shadow: 0 4px 10px rgba(3, 50, 112, 0.3) !important;
-                transition: all 0.3s ease !important;
-            }
-            /* اجبار رنگ سفید برای متن دکمه فعال */
-            div.stButton > button[kind="primary"] p {
-                color: #ffffff !important; 
-                font-weight: 900 !important;
-                font-size: 16px !important;
-            }
-            div.stButton > button[kind="primary"] * { color: #ffffff !important; }
-
-            div.stButton > button[kind="primary"]:hover {
-                box-shadow: 0 6px 15px rgba(3, 60, 112, 0.4) !important;
-                transform: translateY(-1px) !important;
-            }
-
-            div.stButton > button[kind="secondary"] {
-                background-color: #E3F2FD !important;
-                border: 1px solid #e2e8f0 !important;
-                border-radius: 12px !important;
-                padding: 10px 20px !important;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.02) !important;
-                transition: all 0.3s ease !important;
-            }
-            div.stButton > button[kind="secondary"] p {
-                color: #033270 !important;
-                font-weight: 600 !important;
-            }
-            div.stButton > button[kind="secondary"] * { color: #033270 !important; }
-
-            div.stButton > button[kind="secondary"]:hover {
-                background-color: #BFDBFE !important;
-                border-color: #033270 !important;
-                transform: translateY(-2px) !important;
-                box-shadow: 0 5px 15px rgba(3, 50, 112, 0.1) !important;
-            }
-
-            /* استایل کارت‌های آماری */
-            .stat-card-new {
-                background: white; border-radius: 10px; padding: 15px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 5px solid #033270;
-                text-align: center; transition: transform 0.2s;
-            }
-            .stat-card-new:hover { transform: scale(1.02); }
-            .stat-value { font-size: 24px; font-weight: 900; color: #033270; }
-            .stat-label { font-size: 13px; color: #64748B; font-weight: bold; }
-        </style>
+        }
         
-        <div class="header-box">
+        .block-container {
+            padding-top: 3rem !important;
+            padding-bottom: 2rem !important;
+        }
+        
+        /* استایل باکس تیتر مدرن - ارتفاع کاهش یافته */
+        .header-box {
+            position: relative;
+            background: linear-gradient(120deg, #ffffff 0%, #f0f7ff 100%);
+            width: 100%;
+            padding: 18px 30px;
+            border-radius: 16px;
+            border: 1px solid #eef2f6;
+            border-right: 6px solid #033270;
+            box-shadow: 0 10px 30px -10px rgba(3, 50, 112, 0.1);
+            margin-bottom: 25px;
+            direction: rtl;
+            text-align: right;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+            min-height: 70px;
+        }
+        
+        .header-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px -10px rgba(3, 50, 112, 0.15);
+        }
+
+        .header-watermark {
+            position: absolute;
+            left: -10px;
+            bottom: -15px;
+            font-size: 90px;
+            opacity: 0.04;
+            color: #033270;
+            transform: rotate(15deg);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .header-content {
+            position: relative;
+            z-index: 1;
+            flex: 1;
+        }
+        
+        .header-title {
+            color: #033270;
+            margin: 0;
+            font-size: 28px;
+            font-weight: 900;
+            font-family: 'B Nazanin', 'Tahoma', sans-serif;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        /* 🔥 استایل دکمه آپدیت جدید - داخل باکس */
+        .update-button-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 10px 18px;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid rgba(255,255,255,0.3);
+            z-index: 1;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            min-width: 180px;
+        }
+        
+        .update-button-box:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .update-icon {
+            color: white;
+            font-weight: 900;
+            font-size: 16px;
+            margin: 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .update-time {
+            color: rgba(255,255,255,0.95);
+            font-size: 11px;
+            margin: 3px 0 0 0;
+            font-weight: 600;
+        }
+
+        .compact-separator {
+            margin-top: -20px !important;
+            margin-bottom: -20px !important;
+            border-bottom: 1px solid #E2E8F0;
+            width: 100%;
+            display: block;
+        }
+        
+        /* استایل دکمه‌های تب */
+        div.stButton > button[kind="primary"] {
+            background: linear-gradient(135deg, #034870 0%, #164e96 100%) !important;
+            border: none !important;
+            border-radius: 12px !important;
+            padding: 10px 20px !important;
+            box-shadow: 0 4px 10px rgba(3, 50, 112, 0.3) !important;
+            transition: all 0.3s ease !important;
+        }
+        div.stButton > button[kind="primary"] p {
+            color: #ffffff !important; 
+            font-weight: 900 !important;
+            font-size: 16px !important;
+        }
+        div.stButton > button[kind="primary"] * { color: #ffffff !important; }
+
+        div.stButton > button[kind="primary"]:hover {
+            box-shadow: 0 6px 15px rgba(3, 60, 112, 0.4) !important;
+            transform: translateY(-1px) !important;
+        }
+
+        div.stButton > button[kind="secondary"] {
+            background-color: #f8fafc !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 12px !important;
+            padding: 10px 20px !important;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02) !important;
+            transition: all 0.3s ease !important;
+        }
+        div.stButton > button[kind="secondary"] p {
+            color: #475569 !important;
+            font-weight: 700 !important;
+        }
+        div.stButton > button[kind="secondary"] * { color: #475569 !important; }
+
+        div.stButton > button[kind="secondary"]:hover {
+            background-color: #e2e8f0 !important;
+            border-color: #cbd5e1 !important;
+            color: #033270 !important;
+            transform: translateY(-2px) !important;
+        }
+        div.stButton > button[kind="secondary"]:hover p {
+             color: #033270 !important;
+        }
+
+        </style>
+        """, unsafe_allow_html=True)
+    
+    # محاسبه تاریخ آخرین آپدیت
+    if st.session_state.last_update_hr_global:
+        shamsi_update = jdatetime.datetime.fromgregorian(datetime=st.session_state.last_update_hr_global)
+        last_update_text = shamsi_update.strftime('%Y/%m/%d - %H:%M')
+    else:
+        last_update_text = "هنوز بروزرسانی نشده"
+    
+# ---------------------------------------------------------
+    # 👇👇👇 اصلاح نهایی: جابجایی آیکون به سمت راست دکمه 👇👇👇
+    # ---------------------------------------------------------
+    
+    st.markdown("""
+        <style>
+        @keyframes shine {
+            0% { left: -100%; opacity: 0; }
+            5% { left: -100%; opacity: 0.3; }
+            20% { left: 100%; opacity: 0.3; }
+            100% { left: 100%; opacity: 0; }
+        }
+
+        @keyframes floatIcon {
+            0% { transform: rotate(15deg) translateY(0px); }
+            50% { transform: rotate(10deg) translateY(-10px); }
+            100% { transform: rotate(15deg) translateY(0px); }
+        }
+
+        .header-box {
+            position: relative;
+            /* رنگ آبی ملیح */
+            background: linear-gradient(135deg, #e6f2ff 0%, #cfe5ff 100%);
+            border-right: 6px solid #033270;
+            border-radius: 16px;
+            box-shadow: 0 8px 20px rgba(3, 50, 112, 0.15);
+            overflow: hidden;
+            border: 1px solid #bbdefb;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .header-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(3, 50, 112, 0.3);
+            border-color: #64b5f6;
+        }
+
+        .header-box::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, 
+                rgba(255,255,255,0) 0%, 
+                rgba(255,255,255,0.6) 50%, 
+                rgba(255,255,255,0) 100%);
+            transform: skewX(-25deg);
+            animation: shine 6s infinite;
+            pointer-events: none;
+        }
+
+        .header-watermark {
+            position: absolute;
+            /* ✅✅✅ تغییر مکان آیکون: */
+            left: 250px;  /* قبلا 20px بود، الان 180px شد تا از زیر دکمه بیاید بیرون */
+            bottom: -20px;
+            font-size: 100px;
+            opacity: 0.08;
+            color: #033270;
+            z-index: 0;
+            animation: floatIcon 6s ease-in-out infinite;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # 1. رسم باکس پس‌زمینه (لایه زیرین)
+    # ارتفاع 90 پیکسل برای فضای کافی جهت وسط‌چین کردن
+    st.markdown(f"""
+    <div class="header-box" style="margin-bottom: -85px; height: 90px; z-index: 0;">
+        <div class="header-watermark"><i class="fas fa-users"></i></div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 2. ایجاد ستون‌ها روی باکس (لایه رویی)
+    # ساختار ستون‌ها در حالت فارسی (RTL):
+    # [متن (راست)] --- [دکمه (چپ)] --- [فاصله خالی (لبه چپ)]
+    # نسبت‌ها: 6 واحد متن | 1.3 واحد دکمه | 0.3 واحد فاصله خالی (برای هل دادن دکمه به داخل)
+    c_text, c_btn, c_spacer = st.columns([6, 1.3, 0.3])
+    
+    with c_text:
+        # متن تیتر (سمت راست)
+        # padding-top: 25px باعث می‌شود متن دقیقاً وسط باکس 90 پیکسلی قرار گیرد
+        st.markdown("""
+        <div style="padding-right: 20px; padding-top: 10px;">
             <div class="header-title">👥 مدیریت منابع انسانی</div>
         </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+        
+    with c_btn:
+        # دکمه (سمت چپ)
+        # فاصله از بالا برای تراز عمودی با باکس
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True) 
+        
+        if st.button("🔄 بروزرسانی", use_container_width=True, key="header_update_btn"):
+            fetch_and_clean_data.clear()
+            st.session_state.last_update_personnel = None
+            st.session_state.last_update_employee = None
+            st.session_state.last_update_monthlylist = None
+            st.session_state.last_update_hr_global = datetime.now()
+            st.rerun()
+            
+        # نمایش تاریخ زیر دکمه (بزرگتر و خواناتر)
+        st.markdown(f"""
+        <div style='text-align:center; font-size:13px; font-weight:bold; color:#555; margin-top: -9px; text-shadow: 0 1px 0 rgba(255,255,255,0.8);'>
+            {last_update_text} 📅
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ستون سوم (c_spacer) خالی می‌ماند تا دکمه به سمت راست (داخل باکس) متمایل شود
+
+    # یک فاصله خالی پایین باکس برای جلوگیری از تداخل
+    st.markdown("<div style='margin-bottom: 50px;'></div>", unsafe_allow_html=True)
+
+    # ---------------------------------------------------------
+    # 👆👆👆 پایان کد 👆👆👆
+    # ---------------------------------------------------------
+
+    # 3. مدیریت وضعیت تب فعال
+    if 'hr_active_tab' not in st.session_state:
+        st.session_state.hr_active_tab = "رویدادها"
+    
     # 3. مدیریت وضعیت تب فعال
     if 'hr_active_tab' not in st.session_state:
         st.session_state.hr_active_tab = "رویدادها" # پیش‌فرض
@@ -494,9 +722,9 @@ def show_hr_content():
             st.rerun()
             
     with b2:
-        type_ = "primary" if st.session_state.hr_active_tab == "لیست جامع پرسنل" else "secondary"
-        if st.button("لیست جامع پرسنل 🗂️", use_container_width=True, type=type_):
-            st.session_state.hr_active_tab = "لیست جامع پرسنل"
+        type_ = "primary" if st.session_state.hr_active_tab == "بانک اطلاعات سرمایه انسانی" else "secondary"
+        if st.button(" بانک اطلاعات سرمایه انسانی🗂️", use_container_width=True, type=type_):
+            st.session_state.hr_active_tab = "بانک اطلاعات سرمایه انسانی"
             st.rerun()
     with b3:
         type_ = "primary" if st.session_state.hr_active_tab == "گزارش ماهانه" else "secondary"
@@ -568,8 +796,8 @@ def show_hr_content():
                                      color_discrete_sequence=px.colors.qualitative.Set3)
                         fig1.update_traces(textposition='inside', textinfo='percent+label')
                         fig1.update_layout(
-                            font=dict(family="Vazirmatn, Arial", size=12),
-                            title_font=dict(size=16, family="Vazirmatn, Arial"),
+                            font=dict(family="B Nazanin, Arial", size=12),
+                            title_font=dict(size=16, family="B Nazanin, Arial"),
                             height=400
                         )
                         st.plotly_chart(fig1, use_container_width=True)
@@ -584,8 +812,8 @@ def show_hr_content():
                                      color_continuous_scale='Blues',
                                      orientation='h')
                         fig2.update_layout(
-                            font=dict(family="Vazirmatn, Arial", size=12),
-                            title_font=dict(size=16, family="Vazirmatn, Arial"),
+                            font=dict(family="B Nazanin, Arial", size=12),
+                            title_font=dict(size=16, family="B Nazanin, Arial"),
                             height=400,
                             yaxis={'categoryorder':'total ascending'}
                         )
@@ -602,8 +830,8 @@ def show_hr_content():
                                      color_discrete_sequence=['#3498db', '#e74c3c'])
                         fig3.update_traces(textposition='inside', textinfo='percent+label')
                         fig3.update_layout(
-                            font=dict(family="Vazirmatn, Arial", size=12),
-                            title_font=dict(size=16, family="Vazirmatn, Arial"),
+                            font=dict(family="B Nazanin, Arial", size=12),
+                            title_font=dict(size=16, family="B Nazanin, Arial"),
                             height=400
                         )
                         st.plotly_chart(fig3, use_container_width=True)
@@ -616,8 +844,8 @@ def show_hr_content():
                                           color='تعداد',
                                           color_continuous_scale='RdYlGn')
                         fig4.update_layout(
-                            font=dict(family="Vazirmatn, Arial", size=12),
-                            title_font=dict(size=16, family="Vazirmatn, Arial"),
+                            font=dict(family="B Nazanin, Arial", size=12),
+                            title_font=dict(size=16, family="B Nazanin, Arial"),
                             height=400
                         )
                         st.plotly_chart(fig4, use_container_width=True)
@@ -1170,8 +1398,8 @@ def show_hr_content():
                         max_y_ov = df_chart_plot['Interview'].max() if not df_chart_plot.empty else 10
                         fig_ov.update_layout(
                             title={'text': '📊 کارنامه جذب واحدها', 'y': 0.95, 'x': 1, 'xanchor': 'right', 'xref': 'paper'},
-                            title_font=dict(size=16, family="Vazirmatn, Arial", color='#033270', weight="bold"),
-                            font=dict(family="Vazirmatn, Arial", size=12, color="black"),
+                            title_font=dict(size=16, family="B Nazanin, Arial", color='#033270', weight="bold"),
+                            font=dict(family="B Nazanin, Arial", size=12, color="black"),
                             plot_bgcolor='#ffffff',paper_bgcolor='#ffffff',height=480, barmode='overlay',
                             legend=dict(
                             orientation="h",       # افقی
@@ -1210,8 +1438,8 @@ def show_hr_content():
                         max_ref = plot_df['کل معرفی'].max() if not plot_df.empty else 10
                         fig_ref.update_layout(
                             title={'text': '<b>💎 عملکرد کانال‌های جذب نیرو</b>', 'y': 0.95, 'x': 1, 'xanchor': 'right', 'xref': 'paper'},
-                            title_font=dict(size=18, family="Vazirmatn, Arial", color='#033270', weight="bold"),
-                            font=dict(family="Vazirmatn, Arial", size=12, color="#000000"),
+                            title_font=dict(size=18, family="B Nazanin, Arial", color='#033270', weight="bold"),
+                            font=dict(family="B Nazanin, Arial", size=12, color="#000000"),
                             plot_bgcolor='#f8f9fa', paper_bgcolor='white', height=480,
                             xaxis=dict(title="", tickfont=dict(color="#000000", weight="bold"), automargin=True),
                             yaxis=dict(title="تعداد نفرات", showgrid=True, gridcolor='#e0e0e0', griddash='dash', title_font=dict(color="#000000", size=13, weight="bold"), tickfont=dict(color="#000000"), range=[0, max_ref * 1.3]),
@@ -1340,9 +1568,9 @@ def show_hr_content():
                             color=color_col, color_continuous_scale=color_scale, color_discrete_map=color_map,
                             size_max=50, text='تعداد'
                         )
-                        fig_main.update_traces(textposition='top center', textfont=dict(family="Vazirmatn, Tahoma", size=14, color="black", weight="bold"), marker=dict(line=dict(width=1, color='DarkSlateGrey')))
+                        fig_main.update_traces(textposition='top center', textfont=dict(family="B Nazanin, Tahoma", size=14, color="black", weight="bold"), marker=dict(line=dict(width=1, color='DarkSlateGrey')))
                         fig_main.update_layout(
-                            font=dict(family="Vazirmatn, Tahoma", size=13, color="black"),
+                            font=dict(family="B Nazanin, Tahoma", size=13, color="black"),
                             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff', height=fixed_chart_height,
                             margin=dict(t=30, b=110, l=160, r=20),
                             xaxis=dict(title="", tickangle=-45, tickfont=dict(size=12, weight='bold', color='black'), showline=True, linecolor='black', linewidth=1.5, gridcolor='#e9ecef', automargin=True),
@@ -1366,7 +1594,7 @@ def show_hr_content():
                             fig_pareto = px.bar(pareto_df, x='علت', y='تعداد', text='تعداد', color='تعداد', color_continuous_scale='Reds', custom_data=['درصد_از_کل'])
                             fig_pareto.update_traces(textposition='outside', marker_cornerradius=6, textfont=dict(size=14, weight="bold", color="#000000"), cliponaxis=False, hovertemplate="<b>%{x}</b><br>تعداد: %{y}<br>سهم از کل: %{customdata[0]}%<extra></extra>")
                             fig_pareto.update_layout(
-                                font=dict(family="Vazirmatn, Tahoma", size=12, color="black"),
+                                font=dict(family="B Nazanin, Tahoma", size=12, color="black"),
                                 plot_bgcolor='#ffffff', paper_bgcolor='#ffffff', height=fixed_chart_height,
                                 xaxis=dict(title="", tickangle=-45, tickfont=dict(size=13, weight="bold", color="#000000"), showline=True, linecolor="black", linewidth=2, automargin=True),
                                 yaxis=dict(title="", showgrid=False, showticklabels=True, tickfont=dict(size=12, weight="bold", color="#000000"), range=[0, max_val * 1.35]),
@@ -1507,37 +1735,40 @@ def show_hr_content():
         with col2:
             st.warning("**بازنگری قراردادها**\n\nتاریخ: 1403/10/01\nساعت: 09:00")
             st.error("**ارزیابی عملکرد فصلی**\n\nتاریخ: 1403/10/05\nساعت: 11:00")
-   # ---------------------------------------------------------
-    # بخش 2: لیست پرسنل
+ 
     # ---------------------------------------------------------
+    # بخش 3: بانک اطلاعات سرمایه انسانی (با ترتیب ستون‌های درخواستی)
     # ---------------------------------------------------------
-    # بخش 3: لیست جامع پرسنل (با ترتیب ستون‌های درخواستی)
-    # ---------------------------------------------------------
-    elif st.session_state.hr_active_tab == "لیست جامع پرسنل":
+
+    elif st.session_state.hr_active_tab == "بانک اطلاعات سرمایه انسانی":
         ensure_data_loaded("personnel")
-        st.subheader("🗂️  لیست جامع پرسنل")
         
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("🔄 بارگذاری مجدد", use_container_width=True, key="reload_personnel"):
-                fetch_and_clean_data.clear()
-                with st.spinner("در حال بارگذاری..."):
-                    load_personnel_data()
-                st.rerun()
+        # تیتر
+        st.markdown("""
+            <div style="margin-top: -500px !important; padding-bottom: 10px !important;">
+                <h3 style="color: #033270; font-family: 'B Nazanin'; font-size: 2rem;">
+                    🗂️ بانک اطلاعات سرمایه انسانی
+                </h3>
+            </div>
+        """, unsafe_allow_html=True)
         
-        if st.session_state.last_update_personnel:
-            shamsi_date = jdatetime.datetime.fromgregorian(datetime=st.session_state.last_update_personnel)
-            st.info(f"آخرین به‌روزرسانی: {shamsi_date.strftime('%Y/%m/%d - %H:%M:%S')}")
-        
+        # ✅ شرط اصلی: بررسی وجود داده
         if st.session_state.personnel_data is not None:
             df = st.session_state.personnel_data.copy()
             
-            # 1. تمیزکاری نام ستون‌ها (حذف فاصله و ی/ک عربی)
+            # 1. تمیزکاری نام ستون‌ها
             df.columns = [str(col).strip().replace('ي', 'ی').replace('ك', 'ک') for col in df.columns]
 
-            # 2. فیلترها
-            st.markdown("### 🔍 فیلترها")
-            col_filter1, col_filter2, col_filter3, col_filter4 = st.columns(4)
+            # 2. فیلترها (با فونت بی نازنین)
+            st.markdown("""
+                <div style="margin-bottom: 10px; margin-top: 40px;">
+                    <span style="font-family: 'B Nazanin'; font-size: 1.1rem; font-weight: bold; color: #033270; border-bottom: 2px solid #eee; display: inline-block; width: 100%;">
+                        🔍 فیلترها
+                    </span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            col_filter1, col_filter2, col_filter3, col_filter4 = st.columns(4, gap="small")
             
             with col_filter1: family_filter = st.text_input("نام خانوادگی", key="family_filter")
             with col_filter2: personnel_code_filter = st.text_input("شماره پرسنلی", key="personnel_code_filter")
@@ -1570,66 +1801,51 @@ def show_hr_content():
             if unit_filter != "همه" and 'واحد' in df.columns: 
                 filtered_df = filtered_df[filtered_df['واحد'] == unit_filter]
             
-            # 4. تنظیم ترتیب ستون‌ها (دقیقاً طبق لیست شما)
+            # 4. انتخاب ستون‌ها
             target_columns_personnel = [
-   
-                "محل خدمت",
-                "میانگین حقوق"
-                "رشته تحصیلی",
-                "وضعیت نظام وظیفه",
-                "تعداد فرزند",
-                "وضعیت تاهل",
-                "جنسیت",
-                "میزان تحصیلات",
-                "آدرس",
-                "تاریخ تولد",
-                "نوع قرارداد",
-                "وضعیت کار",
-                "تاریخ ترک کار",
-                "مدت آخرین قرارداد(ماه)",
-                "تاریخ آخرین قرارداد",
-                "تاریخ استخدام",
-                "زیر گروه",
-                "واحد",
-                "نام خانوادگی",
-                "نام",
-                "شماره پرسنلی",
+                "محل خدمت", "میانگین حقوق", "رشته تحصیلی", "وضعیت نظام وظیفه", 
+                "تعداد فرزند", "وضعیت تاهل", "جنسیت", "میزان تحصیلات", "آدرس", 
+                "تاریخ تولد", "نوع قرارداد", "وضعیت کار", "تاریخ ترک کار", 
+                "مدت آخرین قرارداد(ماه)", "تاریخ آخرین قرارداد", "تاریخ استخدام", 
+                "زیر گروه", "واحد", "نام خانوادگی", "نام", "شماره پرسنلی"
             ]
             
-            # انتخاب ستون‌هایی که در فایل موجود هستند
             final_cols = [col for col in target_columns_personnel if col in filtered_df.columns]
             
             if final_cols:
                 filtered_df = filtered_df[final_cols]
 
-            st.dataframe(filtered_df, use_container_width=True, height=600, hide_index=True)
+            # 5. نمایش نهایی (داخل if)
+            st.dataframe(
+                style_dataframe(filtered_df),  # ✅ اعمال استایل آبی ملیح
+                use_container_width=True,
+                height=600,
+                hide_index=True
+            )
         else:
             st.warning("هنوز داده‌ای بارگذاری نشده است.")
    # ---------------------------------------------------------
     # بخش 4: جذب و استخدام (اصلاح نهایی و قطعی)
     # ---------------------------------------------------------
+
     elif st.session_state.hr_active_tab == "جذب و استخدام":
         ensure_data_loaded("employee")
-        st.subheader("📝 جذب و استخدام")
         
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("🔄 بارگذاری مجدد", use_container_width=True, key="reload_employee"):
-                fetch_and_clean_data.clear()
-                with st.spinner("در حال بارگذاری..."):
-                    load_employee_data()
-                st.rerun()
+            # تیتر
+        st.markdown("""
+            <div style="margin-top: -500px !important; padding-bottom: 10px !important;">
+                <h3 style="color: #033270; font-family: 'B Nazanin'; font-size: 2rem;">
+                    📝 جذب و استخدام
+                </h3>
+            </div>
+        """, unsafe_allow_html=True)
         
-        if st.session_state.last_update_employee:
-            shamsi_date = jdatetime.datetime.fromgregorian(datetime=st.session_state.last_update_employee)
-            st.info(f"آخرین به‌روزرسانی: {shamsi_date.strftime('%Y/%m/%d - %H:%M:%S')}")
-        
-        # --- اصلاح مهم: بررسی وجود داده ---
+        # ✅ شرط اصلی: بررسی وجود داده
         if st.session_state.employee_data is not None:
-            # 1. ابتدا متغیر را می‌سازیم
+            # 1. کپی داده‌ها
             df_emp = st.session_state.employee_data.copy()
             
-            # 2. تمام محاسبات حتماً باید با یک پله فاصله (Indent) داخل همین if باشند
+            # 2. محاسبات آماری (داخل شرط)
             total_interviewed = len(df_emp)
             
             if 'تاریخ شروع بکار' in df_emp.columns:
@@ -1666,64 +1882,70 @@ def show_hr_content():
                 undecided_count = len(undecided_df)
                 if total_interviewed > 0: undecided_percentage = round((undecided_count / total_interviewed) * 100, 1)
             
-            st.markdown("### 📊 آمار استخدام")
+            # 3. نمایش کارت‌های آمار
+        
             col1, col2, col3, col4, col5 = st.columns(5)
             with col1: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"><h3 style="color: white !important;">👥 نفرات مصاحبه شده</h3><div class="stat-number">{total_interviewed}</div><div class="stat-label">نفر</div></div>', unsafe_allow_html=True)
             with col2: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"><h3 style="color: white !important;">🎯 بیشترین مصاحبه</h3><div class="stat-number">{most_interviewed_count}</div><div class="stat-label">{most_interviewed_unit} ({most_interviewed_percentage}%)</div></div>', unsafe_allow_html=True)
             with col3: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);"><h3 style="color: white !important;">✅ استخدام شدگان</h3><div class="stat-number">{hired_count}</div><div class="stat-label">{hired_percentage}% از {total_interviewed} نفر</div></div>', unsafe_allow_html=True)
             with col4: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);"><h3 style="color: white !important;">🏆 بیشترین استخدام</h3><div class="stat-number">{most_hired_unit}</div><div class="stat-label">مرد: {gender_percentages.get("مرد", 0)}% | زن: {gender_percentages.get("زن", 0)}%</div></div>', unsafe_allow_html=True)
             with col5: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);"><h3 style="color: white !important;">❓ نامشخص</h3><div class="stat-number">{undecided_count}</div><div class="stat-label">{undecided_percentage}% از {total_interviewed} نفر</div></div>', unsafe_allow_html=True)
-        # ✅✅✅ ایجاد فاصله ۵۰ پیکسلی از بالا
+            
             st.markdown('<div style="margin-top: 50px;"></div>', unsafe_allow_html=True)
-            # --- نمایش جدول با ترتیب ستون‌های دلخواه ---
+            
+            # 4. آماده‌سازی جدول
             st.subheader("📊 لیست مصاحبه‌شوندگان")
             
-            # تعریف ترتیب ستون‌ها
             desired_columns = [
-                
-                "ماه"
-                "وضعیت نهایی", 
-                "علت_دسته_بندی_شده",
-                "علت نپذیرفتن", 
-                "تاریخ شروع بکار", 
-                "معرف", 
-                "جنسیت", 
-                "واحد", 
-                "نام و نام خانوادگی", 
-
+                "ماه", "وضعیت نهایی", "علت_دسته_بندی_شده", "علت نپذیرفتن", 
+                "تاریخ شروع بکار", "معرف", "جنسیت", "واحد", "نام و نام خانوادگی"
             ]
-            
-            # فقط ستون‌هایی را انتخاب می‌کنیم که واقعاً در فایل اکسل/شیت موجود باشند (برای جلوگیری از ارور)
+            # لیست ستون‌ها به ترتیب دلخواه شما (دقت کنید کاماها فراموش نشوند)
+            desired_columns = [
+                "ماه",
+                "وضعیت نهایی",
+                "علت_دسته_بندی_شده",
+                "علت نپذیرفتن",
+                "تاریخ شروع بکار",
+                "معرف",
+                "جنسیت",
+                "واحد",
+                "نام و نام خانوادگی"
+            ]
+            # انتخاب ستون‌های موجود
             final_cols = [col for col in desired_columns if col in df_emp.columns]
             
-            # اگر ستونی پیدا شد، جدول را فیلتر کن، وگرنه کل جدول را نشان بده
+            # ساخت df_show (این متغیر اینجا ساخته می‌شود)
             if final_cols:
                 df_show = df_emp[final_cols]
             else:
                 df_show = df_emp
             
-            st.dataframe(df_show, use_container_width=True, height=500, hide_index=True)
+            # 5. نمایش جدول (حتما داخل if باشد تا df_show شناخته شود)
+            st.dataframe(
+                style_dataframe(df_show),  # ✅ اعمال استایل آبی
+                use_container_width=True,
+                height=500,
+                hide_index=True
+            )
         
         else:
+            # اگر داده نبود، این پیام نمایش داده می‌شود
             st.warning("هنوز داده‌ای بارگذاری نشده است. لطفاً دکمه بارگذاری را بزنید.")
    # ---------------------------------------------------------
     # بخش 5: گزارش ماهانه (اصلاح شده برای مشکل آبان و حروف)
     # ---------------------------------------------------------
     elif st.session_state.hr_active_tab == "گزارش ماهانه":
         ensure_data_loaded("monthly")
-        st.subheader("📊 گزارش کارکرد و وضعیت ماهانه")
         
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("🔄 دریافت اطلاعات جدید", use_container_width=True, key="btn_reload_monthly"):
-                fetch_and_clean_data.clear()
-                with st.spinner("در حال دریافت اطلاعات..."):
-                    load_monthlylist_data()
-                st.rerun()
-
-        if st.session_state.last_update_monthlylist:
-            shamsi_date = jdatetime.datetime.fromgregorian(datetime=st.session_state.last_update_monthlylist)
-            st.info(f"آخرین آپدیت: {shamsi_date.strftime('%Y/%m/%d - %H:%M:%S')}")
+            # تیتر
+        st.markdown("""
+            <div style="margin-top: -500px !important; padding-bottom: 10px !important;">
+                <h3 style="color: #033270; font-family: 'B Nazanin'; font-size: 2rem;">
+                    📊 گزارش ماهانه
+                </h3>
+            </div>
+        """, unsafe_allow_html=True)
 
         if st.session_state.monthlylist_data is not None:
             df = st.session_state.monthlylist_data.copy()
@@ -1757,8 +1979,24 @@ def show_hr_content():
                 if sorted_months:
                     default_index = len(sorted_months) # انتخاب آخرین ماه
 
-            # --- نمایش فیلترها ---
-            st.markdown("### 🔍 فیلترهای گزارش")
+            # 2. فیلترها (اصلاح شده: فاصله بیشتر از بالا + فونت بی نازنین)
+            st.markdown("""
+                <div style="margin-bottom: 10px; margin-top: 40px;"> <span style="
+                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
+                        font-size: 1.1rem;
+                        font-weight: bold;
+                        color: #033270;
+                        border-bottom: 2px solid #eee;
+                        padding-bottom: 5px;
+                        display: inline-block;
+                        width: 100%;
+                    ">
+                        🔍 فیلترها
+                    </span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            col_filter1, col_filter2, col_filter3, col_filter4 = st.columns(4, gap="small")
             c1, c2, c3, c4, c5 = st.columns(5)
             with c1: f_family = st.text_input("نام خانوادگی", key="sm_fam")
             with c2: f_code = st.text_input("شماره پرسنلی", key="sm_cod")
@@ -1778,6 +2016,13 @@ def show_hr_content():
             if f_month != "همه" and 'ماه' in df_show.columns: df_show = df_show[df_show['ماه'] == f_month]
             if f_unit != "همه" and 'واحد' in df_show.columns: df_show = df_show[df_show['واحد'] == f_unit]
             if f_loc != "همه" and 'محل خدمت' in df_show.columns: df_show = df_show[df_show['محل خدمت'] == f_loc]
+            # 5. نمایش جدول (حتما داخل if باشد تا df_show شناخته شود)
+            st.dataframe(
+                style_dataframe(df_show),  # ✅ اعمال استایل آبی
+                use_container_width=True,
+                height=500,
+                hide_index=True
+            )
 
             st.markdown(f"##### تعداد رکورد: {len(df_show)}")
 
@@ -1813,7 +2058,24 @@ def show_hr_content():
             # ==========================================
             # 🔍 بخش فیلترها (۵ ستون در یک ردیف)
             # ==========================================
-            st.markdown("### 🔍 فیلترهای گزارش")
+            # 2. فیلترها (اصلاح شده: فاصله بیشتر از بالا + فونت بی نازنین)
+            st.markdown("""
+                <div style="margin-bottom: 10px; margin-top: 40px;"> <span style="
+                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
+                        font-size: 1.1rem;
+                        font-weight: bold;
+                        color: #033270;
+                        border-bottom: 2px solid #eee;
+                        padding-bottom: 5px;
+                        display: inline-block;
+                        width: 100%;
+                    ">
+                        🔍 فیلترها
+                    </span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            col_filter1, col_filter2, col_filter3, col_filter4 = st.columns(4, gap="small")
             # تغییر به 5 ستون برای جا شدن فیلتر محل خدمت
             c1, c2, c3, c4, c5 = st.columns(5)
             
