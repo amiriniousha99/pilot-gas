@@ -853,882 +853,697 @@ def show_hr_content():
                         st.plotly_chart(fig4, use_container_width=True)
             else:
                 st.warning("داده‌های پرسنل بارگذاری نشده‌اند.")
-        
-        with sub_tab2:
-            st.markdown("### 📊 سامانه هوشمند تحلیل جذب")
-            
-            if st.session_state.employee_data is not None:
-                df_emp = st.session_state.employee_data.copy()
-                
-                filter_col1, filter_col2 = st.columns([3, 1])
-                
 
-                with filter_col1:
-                    if 'جنسیت' in df_emp.columns:
-                        selected_gender = st.radio(
-                            "نمایش بر اساس:",
-                            ["👥 همه", "👨 آقایان", "👩 خانم‌ها"],
-                            horizontal=True,
-                            label_visibility="collapsed",
-                            key="gender_filter_radio"
-                        )
-                        # اعمال فیلتر روی کل دیتافریم
-                        if selected_gender == "👨 آقایان":
-                            df_emp = df_emp[df_emp['جنسیت'] == 'مرد']
-                        elif selected_gender == "👩 خانم‌ها":
-                            df_emp = df_emp[df_emp['جنسیت'] == 'زن']
-                    else:
-                        st.warning("ستون 'جنسیت' یافت نشد.")
-
-                with filter_col2:
-                    # فضای خالی یا دکمه رفرش (اختیاری)
-                    pass
-            
-                # =========================================================
-                # 1. محاسبات پیشرفته (Advanced Calculations)
-                # =========================================================
-                total_candidates = len(df_emp)
-                # اطمینان از وجود ستون وضعیت نهایی
-                if 'وضعیت نهایی' in df_emp.columns:
-                    total_hired = len(df_emp[df_emp['وضعیت نهایی'] == 'استخدام شد'])
-                    total_rejected = len(df_emp[df_emp['وضعیت نهایی'] == 'رد شد'])
-                    total_withdrawal = len(df_emp[df_emp['وضعیت نهایی'] == 'انصراف داد'])
-                else:
-                    total_hired = 0
-                    total_rejected = 0
-                    total_withdrawal = 0
-                
-                # الف) نرخ‌ها
-                conversion_rate = (total_hired / total_candidates * 100) if total_candidates > 0 else 0
-                rejection_rate = (total_rejected / total_candidates * 100) if total_candidates > 0 else 0
-                withdrawal_rate = (total_withdrawal / total_candidates * 100) if total_candidates > 0 else 0
-                
-                # ب) شاخص‌های تحلیلی
-                selection_ratio = f"1:{int(total_candidates/total_hired)}" if total_hired > 0 else "0"
-                
-                # امتیاز سلامت فرآیند
-                health_score = 100
-                if withdrawal_rate > 20: health_score -= 30
-                if conversion_rate < 5: health_score -= 20
-                if conversion_rate > 50: health_score -= 10
-                
-                # =========================================================
-                # محاسبات تکمیلی برای کارت‌های جدید
-                # =========================================================
-                # 1. محاسبه نامشخص‌ها (کسانی که وضعیت نهایی‌شان خالی است یا استاندارد نیست)
-                known_statuses = ['استخدام شد', 'رد شد', 'انصراف داد']
-                # فرض بر این است که هر چیزی غیر از این سه تا، نامشخص است
-                total_unknown = len(df_emp[~df_emp['وضعیت نهایی'].isin(known_statuses)])
-                
-                # 2. محاسبه بیشترین مصاحبه (واحدی که بیشترین رکورد را دارد)
-                if 'واحد' in df_emp.columns and not df_emp.empty:
-                    top_interview_unit = df_emp['واحد'].value_counts().idxmax()
-                    top_interview_count = df_emp['واحد'].value_counts().max()
-                    top_interview_pct = (top_interview_count / total_candidates * 100) if total_candidates > 0 else 0
-                else:
-                    top_interview_unit = "---"
-                    top_interview_count = 0
-                    top_interview_pct = 0
-
-                # 3. محاسبه بیشترین استخدام (واحد + جنسیت)
-                hired_df_only = df_emp[df_emp['وضعیت نهایی'] == 'استخدام شد']
-                if 'واحد' in hired_df_only.columns and not hired_df_only.empty:
-                    top_hired_unit = hired_df_only['واحد'].value_counts().idxmax()
-                    top_hired_count = hired_df_only['واحد'].value_counts().max()
-                    
-                    # محاسبه درصد زن و مرد در همین واحد خاص
-                    unit_specific_hired = hired_df_only[hired_df_only['واحد'] == top_hired_unit]
-                    if 'جنسیت' in unit_specific_hired.columns:
-                        m_count = len(unit_specific_hired[unit_specific_hired['جنسیت'] == 'مرد'])
-                        f_count = len(unit_specific_hired[unit_specific_hired['جنسیت'] == 'زن'])
-                        total_unit_hired = len(unit_specific_hired)
-                        m_pct = int((m_count / total_unit_hired) * 100) if total_unit_hired > 0 else 0
-                        f_pct = int((f_count / total_unit_hired) * 100) if total_unit_hired > 0 else 0
-                        gender_detail = f"👨{m_pct}% | 👩{f_pct}%"
-                    else:
-                        gender_detail = "نامشخص"
-                else:
-                    top_hired_unit = "---"
-                    top_hired_count = 0
-                    gender_detail = ""
-
-# =========================================================
-                # محاسبات تکمیلی و آماده‌سازی داده‌ها (نسخه نهایی با تفکیک جنسیت همه کارت‌ها)
-                # =========================================================
-                
-                # تابع کمکی برای تولید HTML آمار جنسیتی (استایل شیشه‌ای)
-                def get_gender_glass_html(df_subset, color_code):
-                    if df_subset.empty or 'جنسیت' not in df_subset.columns:
-                        return '<div style="height: 25px;"></div>' # فضای خالی برای حفظ ساختار
-                    
-                    total = len(df_subset)
-                    m_count = len(df_subset[df_subset['جنسیت'] == 'مرد'])
-                    f_count = len(df_subset[df_subset['جنسیت'] == 'زن'])
-                    
-                    m_pct = int((m_count / total) * 100) if total > 0 else 0
-                    f_pct = int((f_count / total) * 100) if total > 0 else 0
-                    
-                    # باکس سفید نیمه‌شفاف برای آمار
-                    return f"""
-                    <div style="
-                        background: rgba(255, 255, 255, 0.6); 
-                        border-radius: 8px; 
-                        padding: 6px 10px; 
-                        display: flex; 
-                        justify-content: space-between; 
-                        align-items: center; 
-                        margin-top: auto;
-                        font-size: 14px; 
-                        color: #444; 
-                        font-weight: 600;
-                        backdrop-filter: blur(4px);
-                        border: 1px solid rgba(255,255,255,0.4);">
-                        <div style="display:flex; align-items:center;">👨 {m_count} <span style="font-size:11px; opacity:0.7; margin-right:2px;">({m_pct}%)</span></div>
-                        <div style="width:1px; height:12px; background:#ccc; margin:0 5px;"></div>
-                        <div style="display:flex; align-items:center;">👩 {f_count} <span style="font-size:11px; opacity:0.7; margin-right:2px;">({f_pct}%)</span></div>
-                    </div>
-                    """
-
-                # 1. کل متقاضیان
-                gender_html_total = get_gender_glass_html(df_emp, "#3498db")
-
-                # 2. وضعیت نامشخص
-                known_statuses = ['استخدام شد', 'رد شد', 'انصراف داد']
-                unknown_df = df_emp[~df_emp['وضعیت نهایی'].isin(known_statuses)]
-                total_unknown = len(unknown_df)
-                gender_html_unknown = get_gender_glass_html(unknown_df, "#7f8c8d")
-
-                # 3. بیشترین مصاحبه (اصلاح شده: اضافه شدن محاسبه جنسیت)
-                if 'واحد' in df_emp.columns and not df_emp.empty:
-                    top_interview_unit = df_emp['واحد'].value_counts().idxmax()
-                    top_interview_count = df_emp['واحد'].value_counts().max()
-                    # فیلتر کردن دیتا فقط برای همین واحد شلوغ
-                    interview_unit_df = df_emp[df_emp['واحد'] == top_interview_unit]
-                    gender_html_interview = get_gender_glass_html(interview_unit_df, "#9b59b6")
-                else:
-                    top_interview_unit = "---"; top_interview_count = 0; gender_html_interview = ""
-
-                # 4. غربالگری (رد شده)
-                rejected_df = df_emp[df_emp['وضعیت نهایی'] == 'رد شد']
-                rejection_rate = (len(rejected_df) / total_candidates * 100) if total_candidates > 0 else 0
-                
-                # 👇👇👇 این خط جدید را اضافه کنید تا آمار جنسیت ساخته شود 👇👇👇
-                gender_html_rejected = get_gender_glass_html(rejected_df, "#c0392b")
-                
-                # 5. انصراف
-                withdrawal_df = df_emp[df_emp['وضعیت نهایی'] == 'انصراف داد']
-                gender_html_withdrawal = get_gender_glass_html(withdrawal_df, "#e67e22")
-
-                # 6. استخدام نهایی
-                hired_df_only = df_emp[df_emp['وضعیت نهایی'] == 'استخدام شد']
-                gender_html_hired = get_gender_glass_html(hired_df_only, "#2ecc71")
-
-                # 7. بیشترین جذب
-                if 'واحد' in hired_df_only.columns and not hired_df_only.empty:
-                    top_hired_unit = hired_df_only['واحد'].value_counts().idxmax()
-                    top_hired_count = hired_df_only['واحد'].value_counts().max()
-                    unit_specific = hired_df_only[hired_df_only['واحد'] == top_hired_unit]
-                    gender_html_top_unit = get_gender_glass_html(unit_specific, "#16a085")
-                else:
-                    top_hired_unit = "---"; top_hired_count = 0; gender_html_top_unit = ""
-
-                # 8. شاخص تلاش
-                if total_hired > 0:
-                    effort_ratio = round(total_candidates / total_hired, 1)
-                    effort_text = f"1 : {effort_ratio}"
-                else:
-                    effort_text = "---"
-
-# =========================================================
-                # 2. استایل کارت‌های رنگی (ارتفاع ثابت ۱۷۰ - فشرده‌سازی فاصله‌ها)
-                # =========================================================
-                st.markdown("""
-                <style>
-                    .gradient-card {
-                        border-radius: 16px;
-                        padding: 10px 14px !important; /* 👈 کاهش پدینگ برای فضای بیشتر */
-                        height: 170px !important;      /* 👈 ارتفاع ثابت و استاندارد */
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: space-between;
-                        position: relative;
-                        overflow: hidden;
-                        border: 1px solid rgba(255,255,255,0.5);
-                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
-                    }
-                    
-                    .gradient-card:hover {
-                        transform: translateY(-5px);
-                        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-                    }
-
-                    .watermark-icon {
-                        position: absolute;
-                        top: -15px;
-                        left: -15px;
-                        font-size: 80px;
-                        opacity: 0.08;
-                        pointer-events: none;
-                        transform: rotate(15deg);
-                    }
-
-                    .card-content {
-                        position: relative;
-                        z-index: 2;
-                        display: flex;
-                        flex-direction: column;
-                        height: 100%;
-                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
-                    }
-
-                    /* تیتر */
-                    .g-title {
-                        font-size: 15px !important;
-                        font-weight: 800;
-                        color: rgba(0,0,0,0.6);
-                        margin: 0 !important; /* حذف فاصله اضافی */
-                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
-                    }
-
-                    /* عدد اصلی */
-                    .g-value {
-                        font-size: 36px !important; /* درشت و مناسب */
-                        font-weight: 900;
-                        color: #333;
-                        margin: 0 !important; /* حذف فاصله اضافی */
-                        line-height: 1.2 !important; /* تنظیم ارتفاع خط */
-                        text-shadow: 1px 1px 0px rgba(255,255,255,0.5);
-                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
-                    }
-
-                    /* زیرنویس */
-                    .g-sub {
-                        font-size: 13px !important;
-                        color: rgba(0,0,0,0.6);
-                        font-weight: 700;
-                        margin-bottom: auto !important;
-                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
-                    }
-                </style>
-                """, unsafe_allow_html=True)
-
-                # --- ردیف اول ---
-                r1_c1, r1_c2, r1_c3, r1_c4 = st.columns(4)
-                
-                with r1_c1: # کل متقاضیان
-                    bg = "linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)"
-                    st.markdown(f"""
-                    <div class="gradient-card" style="background: {bg};">
-                        <div class="watermark-icon">📂</div>
-                        <div class="card-content">
-                            <div class="g-title">کل متقاضیان</div>
-                            <div class="g-value">{total_candidates}</div>
-                            <div class="g-sub">رزومه‌های دریافتی</div>
-                            {gender_html_total}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                with r1_c2: # نامشخص
-                    bg = "linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)"
-                    st.markdown(f"""
-                    <div class="gradient-card" style="background: {bg};">
-                        <div class="watermark-icon">❓</div>
-                        <div class="card-content">
-                            <div class="g-title">وضعیت نامشخص</div>
-                            <div class="g-value">{total_unknown}</div>
-                            <div class="g-sub">در انتظار بررسی</div>
-                            {gender_html_unknown}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                with r1_c3: # ترافیک مصاحبه (آمار جنسیت اضافه شد ✅)
-                    bg = "linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%)"
-                    st.markdown(f"""
-                    <div class="gradient-card" style="background: {bg};">
-                        <div class="watermark-icon">🔥</div>
-                        <div class="card-content">
-                            <div class="g-title">ترافیک مصاحبه</div>
-                            <div class="g-value">{top_interview_count}</div>
-                            <div class="g-sub">{top_interview_unit}</div>
-                            {gender_html_interview}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with r1_c4: # کارت رد شده (با آمار زن و مرد)
-                    bg = "linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)"
-                    st.markdown(f"""
-                    <div class="gradient-card" style="background: {bg};">
-                        <div class="watermark-icon">🛡️</div>
-                        <div class="card-content">
-                            <div class="g-title">رد شده</div>
-                            <div class="g-value">{total_rejected}</div>
-                            <div class="g-sub">در مرحله غربالگری</div>
+            with sub_tab2:
+                        st.markdown("### 📊 سامانه هوشمند تحلیل جذب")
+                        
+                        if st.session_state.employee_data is not None:
+                            df_emp = st.session_state.employee_data.copy()
                             
-                            {gender_html_rejected}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                # --- ردیف دوم ---
-                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
-                r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
+                            # فیلتر جنسیت
+                            filter_col1, filter_col2 = st.columns([3, 1])
+                            with filter_col1:
+                                if 'جنسیت' in df_emp.columns:
+                                    selected_gender = st.radio(
+                                        "نمایش بر اساس:",
+                                        ["👥 همه", "👨 آقایان", "👩 خانم‌ها"],
+                                        horizontal=True,
+                                        label_visibility="collapsed",
+                                        key="gender_filter_radio"
+                                    )
+                                    if selected_gender == "👨 آقایان":
+                                        df_emp = df_emp[df_emp['جنسیت'] == 'مرد']
+                                    elif selected_gender == "👩 خانم‌ها":
+                                        df_emp = df_emp[df_emp['جنسیت'] == 'زن']
 
-                with r2_c1: # انصراف
-                    bg = "linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)"
-                    st.markdown(f"""
-                    <div class="gradient-card" style="background: {bg};">
-                        <div class="watermark-icon">🏃</div>
-                        <div class="card-content">
-                            <div class="g-title">انصراف داوطلب</div>
-                            <div class="g-value">{total_withdrawal}</div>
-                            <div class="g-sub">خروج از فرآیند</div>
-                            {gender_html_withdrawal}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                            # =========================================================
+                            # 1. محاسبات (بدون تغییر)
+                            # =========================================================
+                            total_candidates = len(df_emp)
+                            if 'وضعیت نهایی' in df_emp.columns:
+                                total_hired = len(df_emp[df_emp['وضعیت نهایی'] == 'استخدام شد'])
+                                total_rejected = len(df_emp[df_emp['وضعیت نهایی'] == 'رد شد'])
+                                total_withdrawal = len(df_emp[df_emp['وضعیت نهایی'] == 'انصراف داد'])
+                                known_statuses = ['استخدام شد', 'رد شد', 'انصراف داد']
+                                total_unknown = len(df_emp[~df_emp['وضعیت نهایی'].isin(known_statuses)])
+                            else:
+                                total_hired = 0; total_rejected = 0; total_withdrawal = 0; total_unknown = 0
+                            
+                            conversion_rate = (total_hired / total_candidates * 100) if total_candidates > 0 else 0
+                            rejection_rate = (total_rejected / total_candidates * 100) if total_candidates > 0 else 0
+                            withdrawal_rate = (total_withdrawal / total_candidates * 100) if total_candidates > 0 else 0
+                            selection_ratio = f"1:{int(total_candidates/total_hired)}" if total_hired > 0 else "0"
+                            
+                            health_score = 100
+                            if withdrawal_rate > 20: health_score -= 30
+                            if conversion_rate < 5: health_score -= 20
+                            if conversion_rate > 50: health_score -= 10
 
-                with r2_c2: # استخدام نهایی
-                    bg = "linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)"
-                    st.markdown(f"""
-                    <div class="gradient-card" style="background: {bg};">
-                        <div class="watermark-icon">🤝</div>
-                        <div class="card-content">
-                            <div class="g-title">استخدام نهایی</div>
-                            <div class="g-value">{total_hired}</div>
-                            <div class="g-sub">جذب موفق</div>
-                            {gender_html_hired}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                with r2_c3: # بیشترین جذب
-                    bg = "linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%)"
-                    st.markdown(f"""
-                    <div class="gradient-card" style="background: {bg};">
-                        <div class="watermark-icon">🏆</div>
-                        <div class="card-content">
-                            <div class="g-title">واحد برتر جذب</div>
-                            <div class="g-value">{top_hired_count}</div>
-                            <div class="g-sub">{top_hired_unit}</div>
-                            {gender_html_top_unit}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                            if 'واحد' in df_emp.columns and not df_emp.empty:
+                                top_interview_unit = df_emp['واحد'].value_counts().idxmax()
+                                top_interview_count = df_emp['واحد'].value_counts().max()
+                            else:
+                                top_interview_unit = "---"; top_interview_count = 0
 
-                with r2_c4: # کارایی فرآیند جذب<
-                    bg = "linear-gradient(135deg, #eceff1 0%, #cfd8dc 100%)"
-                    st.markdown(f"""
-                    <div class="gradient-card" style="background: {bg};">
-                        <div class="watermark-icon">⚖️</div>
-                        <div class="card-content">
-                            <div class="g-title"> کارایی فرآیند جذب</div>
-                            <div class="g-value">{effort_text}</div>
-                            <div style="margin-top:auto; font-size:15px; color:#455a64; background:rgba(255,255,255,0.6); padding:4px 8px; border-radius:6px; text-align:center;">
-                               بررسی به ازای ۱ استخدام
-                            </div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                # =========================================================
-                # 3. تحلیل عمیق و استراتژیک (Strategic Analysis)
-                # =========================================================
-                st.markdown("<div style='margin-bottom: 25px;'></div>", unsafe_allow_html=True)
-                
-                # منطق تولید متن تحلیل
-                if withdrawal_rate > rejection_rate:
-                    main_insight = "⚠️ **چالش برند کارفرمایی:** نرخ انصراف بیشتر از نرخ رد شدن است. سازمان در «جذب» مشکل ندارد اما در «متقاعدسازی و نگهداشت» کاندیداها چالش دارد."
-                    action_item = "بررسی رقابتی بودن حقوق و مزایا."
-                    sentiment_color = "#fff3cd" # زرد
-                elif rejection_rate > 70:
-                    main_insight = "⚠️ **چالش کانال‌های ورودی:** نرخ رد شدن بسیار بالاست (بیش از ۷۰٪). زمان زیادی صرف مصاحبه با افراد نامرتبط می‌شود."
-                    action_item = "اصلاح شرح شغل (Job Description) در آگهی‌ها + استفاده از فیلترهای اولیه دقیق‌تر."
-                    sentiment_color = "#f8d7da" # قرمز
-                else:
-                    main_insight = "✅ **تعادل پایدار:** نسبت‌های جذب، رد و انصراف در وضعیت نرمال و سالمی قرار دارند."
-                    action_item = "حفظ رویه فعلی و تمرکز بر کاهش زمان استخدام (Time to Hire)."
-                    sentiment_color = "#d4edda" # سبز
+                            hired_df_only = df_emp[df_emp['وضعیت نهایی'] == 'استخدام شد']
+                            if 'واحد' in hired_df_only.columns and not hired_df_only.empty:
+                                top_hired_unit = hired_df_only['واحد'].value_counts().idxmax()
+                                top_hired_count = hired_df_only['واحد'].value_counts().max()
+                                
+                                unit_specific = hired_df_only[hired_df_only['واحد'] == top_hired_unit]
+                                if 'جنسیت' in unit_specific.columns:
+                                    m_c = len(unit_specific[unit_specific['جنسیت'] == 'مرد'])
+                                    f_c = len(unit_specific[unit_specific['جنسیت'] == 'زن'])
+                                    tot = len(unit_specific)
+                                    m_p = int((m_c/tot)*100) if tot>0 else 0
+                                    f_p = int((f_c/tot)*100) if tot>0 else 0
+                                    gender_html_top_unit = f"""<div style="background:rgba(255,255,255,0.6); border-radius:8px; padding:6px; display:flex; justify-content:space-between; font-size:13px; color:#444;"><div>👨 {m_c} <span style="font-size:10px;">({m_p}%)</span></div><div>👩 {f_c} <span style="font-size:10px;">({f_p}%)</span></div></div>"""
+                                else: gender_html_top_unit = ""
+                            else:
+                                top_hired_unit = "---"; top_hired_count = 0; gender_html_top_unit = ""
 
-                with st.expander("🧠اتاق فکر و بینش", expanded=False):
-                    ac1, ac2, ac3 = st.columns([1.5, 1.5, 1])
-                    
-                    with ac1:
-                        st.markdown(f"""
-                        <div style="direction: rtl; text-align: right; height: 100%;">
-                            <h5 style="color: #033270; border-bottom: 1px solid #eee; padding-bottom: 5px;">📊 تفسیر قیف جذب</h5>
-                            <ul style="font-size: 13px; line-height: 2.2; color: #444;">
-                                <li><b>کارایی سیستم:</b> برای هر استخدام نهایی، تیم منابع انسانی <b style="color:#033270">{selection_ratio.split(':')[1] if ':' in selection_ratio else 0}</b> مصاحبه انجام داده است.</li>
-                                <li><b>کیفیت ورودی:</b> <b style="color:#e74c3c">{rejection_rate:.1f}٪</b> از متقاضیان استانداردهای لازم را نداشتند.</li>
-                                <li><b>جذابیت سازمان:</b> <b style="color:#f39c12">{withdrawal_rate:.1f}٪</b> از افراد با وجود تایید اولیه، انصراف دادند.</li>
-                            </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with ac2:
-                        st.markdown(f"""
-                        <div style="direction: rtl; text-align: right; height: 100%;">
-                            <h5 style="color: #033270; border-bottom: 1px solid #eee; padding-bottom: 5px;">💡 تجویز مدیریتی</h5>
-                            <div style="background-color: {sentiment_color}; padding: 10px; border-radius: 8px; font-size: 13px; line-height: 1.6; color: #333;">
-                                {main_insight}
-                            </div>
-                            <div style="margin-top: 10px; font-size: 12px; font-weight: bold; color: #033270;">
-                                🚀 اقدام پیشنهادی:<br>
-                                <span style="font-weight: normal; color: #555;">{action_item}</span>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with ac3:
-                        # نمایش شاخص کیفیت جذب به صورت دایره‌ای
-                        st.markdown(f"""
-                        <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
-                            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">شاخص کیفیت جذب</div>
-                            <div style="
-                                width: 80px; height: 80px; 
-                                border-radius: 50%; 
-                                background: conic-gradient(#2ecc71 {health_score}%, #eee 0);
-                                display: flex; align-items: center; justify-content: center;
-                            ">
-                                <div style="
-                                    width: 65px; height: 65px; 
-                                    background: white; 
-                                    border-radius: 50%; 
-                                    display: flex; align-items: center; justify-content: center;
-                                    font-weight: bold; font-size: 18px; color: #2ecc71;
-                                ">
-                                    {health_score}
+                            if total_hired > 0:
+                                effort_text = f"1 : {round(total_candidates / total_hired, 1)}"
+                            else:
+                                effort_text = "---"
+
+                            # توابع کمکی HTML برای کارت‌ها
+                            def get_gender_glass_html(df_subset, color_code):
+                                if df_subset.empty or 'جنسیت' not in df_subset.columns:
+                                    return '<div style="height: 25px;"></div>'
+                                total = len(df_subset)
+                                m_count = len(df_subset[df_subset['جنسیت'] == 'مرد'])
+                                f_count = len(df_subset[df_subset['جنسیت'] == 'زن'])
+                                m_pct = int((m_count / total) * 100) if total > 0 else 0
+                                f_pct = int((f_count / total) * 100) if total > 0 else 0
+                                return f"""
+                                <div style="background: rgba(255, 255, 255, 0.6); border-radius: 8px; padding: 6px 10px; display: flex; justify-content: space-between; align-items: center; margin-top: auto; font-size: 14px; color: #444; font-weight: 600; backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.4);">
+                                    <div style="display:flex; align-items:center;">👨 {m_count} <span style="font-size:11px; opacity:0.7; margin-right:2px;">({m_pct}%)</span></div>
+                                    <div style="width:1px; height:12px; background:#ccc; margin:0 5px;"></div>
+                                    <div style="display:flex; align-items:center;">👩 {f_count} <span style="font-size:11px; opacity:0.7; margin-right:2px;">({f_pct}%)</span></div>
                                 </div>
-                            </div>
-                            <div style="font-size: 11px; color: #999; margin-top: 5px;">از 100</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                # --- استایل CSS ---
-                st.markdown("""
-                <style>
-                div[data-testid="stExpander"] details > summary {
-                    background-color: #033270 !important; color: white !important; border-radius: 10px !important; padding: 10px !important; border: 1px solid #033270 !important; margin-bottom: 0px !important;
-                }
-                div[data-testid="stExpander"] details > summary span, div[data-testid="stExpander"] details > summary p, div[data-testid="stExpander"] details > summary svg {
-                    color: white !important; fill: white !important;
-                }
-                div[data-testid="stExpander"] details > div {
-                    background-color: #ffffff !important; border: 2px solid #033270 !important; border-radius: 0 0 10px 10px !important; border-top: none !important; margin-top: -5px !important; padding-top: 15px !important; position: relative; z-index: 0;
-                }
-                div[data-testid="stExpander"] details[open] > summary {
-                    border-bottom-left-radius: 0 !important; border-bottom-right-radius: 0 !important; border-bottom: 1px solid #033270 !important;
-                }
-                </style>
-                """, unsafe_allow_html=True)
+                                """
 
-                # =========================================================
-                # گام ۱: انجام تمام محاسبات (قبل از رسم)
-                # =========================================================
-                
-                # --- محاسبات سمت راست (قیف جذب) ---
-                if 'واحد' in df_emp.columns:
-                    interview_counts = df_emp['واحد'].value_counts()
-                    # شرط استخدام (بدون فیلتر رد شد)
-                    if 'تاریخ شروع بکار' in df_emp.columns:
-                        hired_mask = (df_emp['تاریخ شروع بکار'].notna()) & \
-                                     (~df_emp['تاریخ شروع بکار'].astype(str).str.contains('عدم استخدام|نامشخص', case=False, na=False))
-                        hired_counts = df_emp.loc[hired_mask, 'واحد'].value_counts()
-                    else:
-                        hired_counts = pd.Series()
-                    
-                    df_chart_all = pd.DataFrame({'Interview': interview_counts, 'Hired': hired_counts}).fillna(0)
-                    df_chart_all['Hired'] = df_chart_all['Hired'].astype(int)
-                    df_chart_all['Rate'] = (df_chart_all['Hired'] / df_chart_all['Interview'] * 100).fillna(0).round(1)
-                    
-                    # شاخص‌های کلیدی
-                    total_int_sum = df_chart_all['Interview'].sum()
-                    total_hired_sum = df_chart_all['Hired'].sum()
-                    avg_conversion = (total_hired_sum / total_int_sum * 100) if total_int_sum > 0 else 0
-                    iph = (total_int_sum / total_hired_sum) if total_hired_sum > 0 else total_int_sum
-                    
-                    # پیدا کردن بهترین و بدترین واحد
-                    if not df_chart_all.empty:
-                        qualified = df_chart_all[df_chart_all['Interview'] >= 3]
-                        if not qualified.empty:
-                            best_unit = qualified.sort_values('Rate', ascending=False).iloc[0]
-                            worst_unit = qualified.sort_values('Rate', ascending=True).iloc[0]
-                        else:
-                            best_unit = worst_unit = df_chart_all.iloc[0]
-                    else:
-                        best_unit = None
-                else:
-                    df_chart_all = pd.DataFrame()
-
-                # --- محاسبات سمت چپ (کانال جذب) ---
-                if 'معرف' in df_emp.columns:
-                    df_emp['معرف'] = df_emp['معرف'].fillna('نامشخص').astype(str)
-                    referrer_total = df_emp['معرف'].value_counts()
-                    
-                    if 'تاریخ شروع بکار' in df_emp.columns:
-                        hired_from_referrer = df_emp[
-                            (df_emp['تاریخ شروع بکار'].notna()) & 
-                            (~df_emp['تاریخ شروع بکار'].astype(str).str.contains('عدم استخدام|نامشخص', case=False, na=False))
-                        ]['معرف'].value_counts()
-                    else:
-                        hired_from_referrer = pd.Series()
-                    
-                    ref_df = pd.DataFrame({'کل معرفی': referrer_total}).reset_index()
-                    ref_df.columns = ['معرف', 'کل معرفی']
-                    ref_df['جذب شده'] = ref_df['معرف'].map(hired_from_referrer).fillna(0)
-                    ref_df['نرخ تبدیل'] = (ref_df['جذب شده'] / ref_df['کل معرفی'] * 100).fillna(0)
-                else:
-                    ref_df = pd.DataFrame()
-
-                # =========================================================
-                # گام ۲: رسم ردیف اول (فقط نمودارها)
-                # =========================================================
-                col_chart_right, col_chart_left = st.columns(2)
-
-                # --- رسم نمودار راست ---
-                with col_chart_right:
-                    if not df_chart_all.empty:
-                        df_chart_plot = df_chart_all.sort_values('Interview', ascending=False)
-                        fig_ov = go.Figure()
-                        fig_ov.add_trace(go.Bar(
-                            x=df_chart_plot.index, y=df_chart_plot['Interview'], name='کل متقاضیان',
-                            marker_color='rgba(189, 195, 199, 0.5)', marker_line_width=0, width=0.75,
-                            hovertemplate='واحد: %{x}<br>کل مصاحبه: %{y}<extra></extra>'
-                        ))
-                        fig_ov.add_trace(go.Bar(
-                            x=df_chart_plot.index, y=df_chart_plot['Hired'], name='جذب موفق',
-                            marker_color='#033270', width=0.35, text=df_chart_plot['Hired'], textposition='outside',
-                            textfont=dict(color='#033270', weight='bold', size=13),
-                            hovertemplate='واحد: %{x}<br>تعداد جذب: %{y}<br>نرخ موفقیت: %{customdata}%<extra></extra>',
-                            customdata=df_chart_plot['Rate']
-                        ))
-                        max_y_ov = df_chart_plot['Interview'].max() if not df_chart_plot.empty else 10
-                        fig_ov.update_layout(
-                            title={'text': '📊 کارنامه جذب واحدها', 'y': 0.95, 'x': 1, 'xanchor': 'right', 'xref': 'paper'},
-                            title_font=dict(size=16, family="B Nazanin, Arial", color='#033270', weight="bold"),
-                            font=dict(family="B Nazanin, Arial", size=12, color="black"),
-                            plot_bgcolor='#ffffff',paper_bgcolor='#ffffff',height=480, barmode='overlay',
-                            legend=dict(
-                            orientation="h",       # افقی
-                            yanchor="top",         # تراز از بالا
-                            y=0.99,                # چسبیده به سقف (داخل کادر)
-                            xanchor="left",        # تراز از چپ
-                            x=0.01,                # چسبیده به چپ (داخل کادر)
-                            bgcolor='rgba(255, 255, 255, 0.8)', # پس‌زمینه سفید نیمه‌شفاف
-                            font=dict(color="black")
-                            # خطوط مربوط به کادر (border) حذف شدند
-                        ),
-                            xaxis=dict(tickangle=-45, tickfont=dict(size=11, weight='bold', color='black'), showline=True, linecolor='#ccc'),
-                            yaxis=dict(title="تعداد نفرات", showgrid=True, gridcolor='#eee', tickfont=dict(color='black'), range=[0, max_y_ov * 1.25]),
-                            margin=dict(t=80, b=80, l=50, r=40)
-                        )
-                        st.plotly_chart(fig_ov, use_container_width=True, theme=None)
-                    else:
-                        st.warning("داده‌ای برای واحدها یافت نشد.")
-
-                # --- رسم نمودار چپ ---
-                with col_chart_left:
-                    if not ref_df.empty:
-                        plot_df = ref_df[ref_df['کل معرفی'] > 0].sort_values('جذب شده', ascending=False).head(8)
-                        fig_ref = go.Figure()
-                        fig_ref.add_trace(go.Bar(
-                            x=plot_df['معرف'], y=plot_df['کل معرفی'], name='تعداد ورودی', 
-                            marker_color='#4FC3F7', marker_line_width=0, text=plot_df['کل معرفی'], 
-                            textposition='outside', marker_cornerradius=8, textfont=dict(size=11, color='#000000'), cliponaxis=False
-                        ))
-                        fig_ref.add_trace(go.Scatter(
-                            x=plot_df['معرف'], y=plot_df['جذب شده'], name='استخدام موفق', 
-                            mode='lines+markers+text', text=plot_df['جذب شده'], textposition='top center',
-                            textfont=dict(color='#0D47A1', weight='bold'), line=dict(color='#0D47A1', width=3),
-                            marker=dict(size=12, color='#0D47A1', line=dict(width=2, color='white'))
-                        ))
-                        max_ref = plot_df['کل معرفی'].max() if not plot_df.empty else 10
-                        fig_ref.update_layout(
-                            title={'text': '<b>💎 عملکرد کانال‌های جذب نیرو</b>', 'y': 0.95, 'x': 1, 'xanchor': 'right', 'xref': 'paper'},
-                            title_font=dict(size=18, family="B Nazanin, Arial", color='#033270', weight="bold"),
-                            font=dict(family="B Nazanin, Arial", size=12, color="#000000"),
-                            plot_bgcolor='#f8f9fa', paper_bgcolor='white', height=480,
-                            xaxis=dict(title="", tickfont=dict(color="#000000", weight="bold"), automargin=True),
-                            yaxis=dict(title="تعداد نفرات", showgrid=True, gridcolor='#e0e0e0', griddash='dash', title_font=dict(color="#000000", size=13, weight="bold"), tickfont=dict(color="#000000"), range=[0, max_ref * 1.3]),
-                            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0, font=dict(color="black")),
-                            margin=dict(t=80, b=50, l=40, r=40)
-                        )
-                        st.plotly_chart(fig_ref, use_container_width=True, theme=None)
-                    else:
-                        st.warning("داده‌ای برای کانال‌ها یافت نشد.")
-# =========================================================
-                # ردیف دوم: فقط تحلیل‌ها (اصلاح شده: فونت و تراز کارت‌ها)
-                # =========================================================
-                st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
-                col_anal_right, col_anal_left = st.columns(2)
-
-                # --- تحلیل سمت راست (Executive Summary) ---
-                with col_anal_right:
-                    if not df_chart_all.empty and best_unit is not None:
-                        with st.expander("🎯 تابلوی فرمان شاخص‌ها ", expanded=False):
-                            c1, c2, c3, c4 = st.columns(4)
+                            gender_html_total = get_gender_glass_html(df_emp, "#3498db")
+                            unknown_df = df_emp[~df_emp['وضعیت نهایی'].isin(known_statuses)]
+                            gender_html_unknown = get_gender_glass_html(unknown_df, "#7f8c8d")
                             
-                            # استایل مشترک برای کارت‌ها (ارتفاع ثابت برای تراز شدن خط زیرین)
-                            card_style = "text-align: center; border-bottom: 3px solid {}; padding-bottom: 10px; height: 120px; display: flex; flex-direction: column; justify-content: center; align-items: center;"
-                            
-                            with c1:
-                                st.markdown(f"""<div style="{card_style.format('#033270')}"><span style="font-size: 11px; color: #666;">کل استخدام‌ها</span><div style="font-size: 22px; font-weight: 900; color: #033270; margin: 5px 0;">{total_hired_sum}</div><span style="font-size: 10px; color: #888;">نفر</span></div>""", unsafe_allow_html=True)
-                            with c2:
-                                st.markdown(f"""<div style="{card_style.format('#3498db')}"><span style="font-size: 11px; color: #666;">نرخ تبدیل سازمان</span><div style="font-size: 22px; font-weight: 900; color: #3498db; margin: 5px 0;">{avg_conversion:.1f}%</div></div>""", unsafe_allow_html=True)
-                            with c3:
-                                iph_color = "#27ae60" if iph < 5 else ("#f39c12" if iph < 10 else "#e74c3c")
-                                st.markdown(f"""<div style="{card_style.format(iph_color)}"><span style="font-size: 11px; color: #666;">شاخص تلاش (IPH)</span><div style="font-size: 22px; font-weight: 900; color: {iph_color}; margin: 5px 0;">{iph:.1f}</div><span style="font-size: 10px; color: #888;">مصاحبه/استخدام</span></div>""", unsafe_allow_html=True)
-                            with c4:
-                                st.markdown(f"""<div style="{card_style.format('#2ecc71')}"><span style="font-size: 11px; color: #666;">واحد ستاره</span><div style="font-size: 15px; font-weight: 900; color: #2ecc71; margin: 5px 0;">{best_unit.name}</div><span style="font-size: 10px; color: #27ae60;">نرخ: {best_unit['Rate']}%</span></div>""", unsafe_allow_html=True)
+                            if 'واحد' in df_emp.columns and not df_emp.empty:
+                                interview_unit_df = df_emp[df_emp['واحد'] == top_interview_unit]
+                                gender_html_interview = get_gender_glass_html(interview_unit_df, "#9b59b6")
+                            else: gender_html_interview = ""
 
-                            gap = best_unit['Rate'] - avg_conversion
-                            efficiency_status = "مطلوب" if iph < 6 else ("نیازمند بهبود" if iph < 12 else "بحرانی")
+                            rejected_df = df_emp[df_emp['وضعیت نهایی'] == 'رد شد']
+                            gender_html_rejected = get_gender_glass_html(rejected_df, "#c0392b")
                             
-                            analysis_text = f"""
-                            <div style="direction: rtl; font-size: 13px; line-height: 2.4; text-align: justify; color: #333;">
-                                <b>💡 تحلیل عملکرد جذب:</b><br>
-                                در بازه زمانی فعلی، سازمان برای جذب هر <b>۱ نفر</b> نیروی انسانی، به طور متوسط با <b>{iph:.1f} نفر</b> مصاحبه انجام داده است که نشان‌دهنده وضعیت <b>«{efficiency_status}»</b> در غربالگری اولیه است.
-                                <br>
-                                <ul>
-                                    <li><b>نقطه قوت (Strength):</b> واحد <b>«{best_unit.name}»</b> با نرخ تبدیل <b>{best_unit['Rate']}%</b> (حدود <b>{gap:+.1f}%</b> بالاتر از میانگین سازمان)، بهینه‌ترین فرآیند انتخاب را داشته است.</li>
-                                    <li><b>نقطه تمرکز (Focus Area):</b> واحد <b>«{worst_unit.name}»</b> با نرخ تبدیل <b>{worst_unit['Rate']}%</b>، بیشترین هدررفت زمان مصاحبه را داشته است. پیشنهاد می‌شود شرح شغل (JD) بازنگری شود.</li>
-                                </ul>
-                            </div>
-                            """
-                            st.markdown(analysis_text, unsafe_allow_html=True)
-                    else:
-                        st.info("داده کافی برای تحلیل موجود نیست.")
+                            withdrawal_df = df_emp[df_emp['وضعیت نهایی'] == 'انصراف داد']
+                            gender_html_withdrawal = get_gender_glass_html(withdrawal_df, "#e67e22")
 
-                # --- تحلیل سمت چپ (Sourcing Analysis) ---
-                with col_anal_left:
-                    if not ref_df.empty:
-                        with st.expander("📊 تحلیل عملکرد کانال‌های جذب", expanded=False):
-                            top_volume_channel = ref_df.sort_values('کل معرفی', ascending=False).iloc[0]
-                            top_quality_channel = ref_df[ref_df['کل معرفی'] >= 3].sort_values('نرخ تبدیل', ascending=False).iloc[0] if len(ref_df) > 0 else top_volume_channel
-                            
-                            # ✅ اصلاح سایز فونت به 13px برای هماهنگی با سمت راست
-                            st.markdown(f"""
-                            <div style="color: #333 !important; text-align: right; direction: rtl; line-height: 2.4; font-size: 13px;">
-                            <b>🧠 بینش آماری:</b><br>
-                            🔹 <b>کانال حجمی:</b> بیشترین رزومه از <b>«{top_volume_channel['معرف']}»</b> ({int(top_volume_channel['کل معرفی'])} مورد).<br>
-                            🔸 <b>کانال کیفی:</b> بهترین بازدهی مربوط به <b>«{top_quality_channel['معرف']}»</b> با نرخ <b>{top_quality_channel['نرخ تبدیل']:.1f}٪</b> است.
-                            </div>
-                            <div style="margin-bottom: 15px;"></div>
+                            hired_df_only = df_emp[df_emp['وضعیت نهایی'] == 'استخدام شد']
+                            gender_html_hired = get_gender_glass_html(hired_df_only, "#2ecc71")
+
+                            # =========================================================
+                            # 2. نمایش کارت‌های رنگی (۸ کارت کامل)
+                            # =========================================================
+                            st.markdown("""
+                            <style>
+                                .gradient-card {
+                                    border-radius: 16px;
+                                    padding: 10px 14px !important; 
+                                    height: 170px !important;      
+                                    display: flex;
+                                    flex-direction: column;
+                                    justify-content: space-between;
+                                    position: relative;
+                                    overflow: hidden;
+                                    border: 1px solid rgba(255,255,255,0.5);
+                                    font-family: 'B Nazanin', Tahoma, sans-serif !important;
+                                }
+                                .gradient-card:hover {
+                                    transform: translateY(-5px);
+                                    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+                                }
+                                .watermark-icon {
+                                    position: absolute;
+                                    top: -15px;
+                                    left: -15px;
+                                    font-size: 80px;
+                                    opacity: 0.08;
+                                    pointer-events: none;
+                                    transform: rotate(15deg);
+                                }
+                                .card-content {
+                                    position: relative;
+                                    z-index: 2;
+                                    display: flex;
+                                    flex-direction: column;
+                                    height: 100%;
+                                    font-family: 'B Nazanin', Tahoma, sans-serif !important;
+                                }
+                                .g-title {
+                                    font-size: 15px !important;
+                                    font-weight: 800;
+                                    color: rgba(0,0,0,0.6);
+                                    margin: 0 !important;
+                                    font-family: 'B Nazanin', Tahoma, sans-serif !important;
+                                }
+                                .g-value {
+                                    font-size: 36px !important;
+                                    font-weight: 900;
+                                    color: #333;
+                                    margin: 0 !important;
+                                    line-height: 1.2 !important;
+                                    text-shadow: 1px 1px 0px rgba(255,255,255,0.5);
+                                    font-family: 'B Nazanin', Tahoma, sans-serif !important;
+                                }
+                                .g-sub {
+                                    font-size: 13px !important;
+                                    color: rgba(0,0,0,0.6);
+                                    font-weight: 700;
+                                    margin-bottom: auto !important;
+                                    font-family: 'B Nazanin', Tahoma, sans-serif !important;
+                                }
+                            </style>
                             """, unsafe_allow_html=True)
+
+                            r1_c1, r1_c2, r1_c3, r1_c4 = st.columns(4)
+                            with r1_c1: 
+                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);"><div class="watermark-icon">📂</div><div class="card-content"><div class="g-title">کل متقاضیان</div><div class="g-value">{total_candidates}</div><div class="g-sub">رزومه‌های دریافتی</div>{gender_html_total}</div></div>""", unsafe_allow_html=True)
+                            with r1_c2:
+                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);"><div class="watermark-icon">❓</div><div class="card-content"><div class="g-title">وضعیت نامشخص</div><div class="g-value">{total_unknown}</div><div class="g-sub">در انتظار بررسی</div>{gender_html_unknown}</div></div>""", unsafe_allow_html=True)
+                            with r1_c3:
+                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);"><div class="watermark-icon">🔥</div><div class="card-content"><div class="g-title">رکورددار مصاحبه‌ها</div><div class="g-value">{top_interview_count}</div><div class="g-sub">{top_interview_unit}</div>{gender_html_interview}</div></div>""", unsafe_allow_html=True)
+                            with r1_c4:
+                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);"><div class="watermark-icon">🛡️</div><div class="card-content"><div class="g-title">غربالگری اولیه</div><div class="g-value">{total_rejected}</div><div class="g-sub">در مرحله غربالگری</div>{gender_html_rejected}</div></div>""", unsafe_allow_html=True)
                             
-                            display_ref_df = ref_df[['معرف', 'کل معرفی', 'جذب شده', 'نرخ تبدیل']].sort_values('نرخ تبدیل', ascending=False).head(10)
-                            display_ref_df.columns = ['کانال', 'ورودی', 'جذب', 'نرخ تبدیل (%)']
-                            st.dataframe(display_ref_df.style.format({'نرخ تبدیل (%)': '{:.1f}%', 'ورودی': '{:,}', 'جذب': '{:,}'}).background_gradient(cmap='Greens', subset=['نرخ تبدیل (%)']), use_container_width=True)
-                    else:
-                        st.info("داده کافی برای تحلیل موجود نیست.")
-# =========================================================
-                # 3. بخش نمودارهای تحلیل ریزش (نمودار سوم و چهارم) - اصلاح نهایی و قطعی
-                # =========================================================
-                st.markdown("<div style='margin-top: -30px;'></div>", unsafe_allow_html=True)
-            
-                # 1. آماده‌سازی و فیلتر داده‌ها
-                status_col = df_emp['وضعیت نهایی'] if 'وضعیت نهایی' in df_emp.columns else pd.Series()
-                # تبدیل به رشته و حذف فاصله برای اطمینان از فیلتر صحیح
-                churn_mask = status_col.astype(str).str.strip().isin(['رد شد', 'انصراف داد'])
-                churn_df = df_emp[churn_mask].copy()
-                
-                # پر کردن ستون‌های خالی برای جلوگیری از ارور
-                if 'علت_دسته_بندی_شده' not in churn_df.columns:
-                    if 'علت نپذیرفتن' in churn_df.columns:
-                        churn_df['علت نپذیرفتن'] = churn_df['علت نپذیرفتن'].fillna('نامشخص').replace(['-', ''], 'نامشخص')
-                        churn_df['علت_دسته_بندی_شده'] = churn_df['علت نپذیرفتن'].apply(categorize_reason)
-                    else:
-                        churn_df['علت_دسته_بندی_شده'] = 'نامشخص'; churn_df['علت نپذیرفتن'] = 'نامشخص'
-
-                if len(churn_df) > 0:
-                    fixed_chart_height = 460
-                    total_churn_count = len(churn_df)
-                    
-                    # =====================================================
-                    # ردیف اول: رسم نمودارها
-                    # =====================================================
-                    c_chart_right, c_chart_left = st.columns([2, 1])
-                    
-                    # --- نمودار سوم (راست - Scatter) ---
-                    with c_chart_right:
-                        h_filter, h_title = st.columns([1, 2])
-                        with h_title:
-                            st.markdown("<h3 style='text-align: right; margin: 0; padding-top: 5px; color:#033270; font-size:16px; font-weight:bold; font-family:tahoma;'>نقشه حرارتی ریزش نیرو🗺️</h3>", unsafe_allow_html=True)
-                        with h_filter:
-                            selected_view = st.selectbox("سطح نمایش:", ["👁️ نمای هلیکوپتری (کلان)", "📂 تفکیک واحدی", "🔍 ریشه‌یابی دقیق"], key="lvl_select_final", label_visibility="collapsed")
-                        
-                        import textwrap
-                        if "👁️ نمای هلیکوپتری (کلان)" in selected_view:
-                            plot_df = churn_df.copy(); y_col = 'وضعیت نهایی'; color_col = 'وضعیت نهایی'; color_scale = None; color_map = {'رد شد': '#c0392b', 'انصراف داد': '#e67e22'} 
-                        elif "📂 تفکیک واحدی" in selected_view:
-                            plot_df = churn_df.copy(); y_col = 'علت_دسته_بندی_شده'; color_col = 'تعداد'; color_scale = 'Reds'; color_map=None
-                        else:
-                            plot_df = churn_df.copy(); y_col = 'علت نپذیرفتن'; color_col = 'تعداد'; color_scale = 'Oranges'; color_map=None
-
-                        if y_col not in plot_df.columns: plot_df[y_col] = "نامشخص"
-
-                        chart_data = plot_df.groupby([y_col, 'واحد']).size().reset_index(name='تعداد')
-                        chart_data['نمایش_محور'] = chart_data[y_col].apply(lambda x: '<br>'.join(textwrap.wrap(str(x), width=35)))
-                        
-                        fig_main = px.scatter(
-                            chart_data, x='واحد', y='نمایش_محور', size='تعداد', 
-                            color=color_col, color_continuous_scale=color_scale, color_discrete_map=color_map,
-                            size_max=50, text='تعداد'
-                        )
-                        fig_main.update_traces(textposition='top center', textfont=dict(family="B Nazanin, Tahoma", size=14, color="black", weight="bold"), marker=dict(line=dict(width=1, color='DarkSlateGrey')))
-                        fig_main.update_layout(
-                            font=dict(family="B Nazanin, Tahoma", size=13, color="black"),
-                            plot_bgcolor='#ffffff', paper_bgcolor='#ffffff', height=fixed_chart_height,
-                            margin=dict(t=30, b=110, l=160, r=20),
-                            xaxis=dict(title="", tickangle=-45, tickfont=dict(size=12, weight='bold', color='black'), showline=True, linecolor='black', linewidth=1.5, gridcolor='#e9ecef', automargin=True),
-                            yaxis=dict(title="", tickfont=dict(size=12, weight='bold', color='black'), showline=True, linecolor='black', linewidth=1.5, gridcolor='#d3d3d3'),
-                            legend=dict(font=dict(color="black", size=12, weight="bold"), orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                            coloraxis_colorbar=dict(title=dict(text="تعداد", font=dict(color="black", weight="bold")), tickfont=dict(color="black", weight="bold"))
-                        )
-                        st.plotly_chart(fig_main, use_container_width=True, key="main_chart_black_text", theme=None)
-
-                    # --- نمودار چهارم (چپ - Pareto) ---
-                    with c_chart_left:
-                        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-                        st.markdown("<div style='text-align: right; border-bottom: 2px solid #eee; margin-bottom: 10px;'><span style='color:#033270; font-size:15px; font-weight:bold; font-family:tahoma;'>گلوگاه‌های اصلی (پارتو)🚧</span></div>", unsafe_allow_html=True)
-                        
-                        if 'علت_دسته_بندی_شده' in churn_df.columns:
-                            pareto_df = churn_df['علت_دسته_بندی_شده'].value_counts().head(5).reset_index()
-                            pareto_df.columns = ['علت', 'تعداد']
-                            pareto_df['درصد_از_کل'] = ((pareto_df['تعداد'] / total_churn_count) * 100).round(1)
-                            max_val = pareto_df['تعداد'].max() if len(pareto_df) > 0 else 10
+                            st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
                             
-                            fig_pareto = px.bar(pareto_df, x='علت', y='تعداد', text='تعداد', color='تعداد', color_continuous_scale='Reds', custom_data=['درصد_از_کل'])
-                            fig_pareto.update_traces(textposition='outside', marker_cornerradius=6, textfont=dict(size=14, weight="bold", color="#000000"), cliponaxis=False, hovertemplate="<b>%{x}</b><br>تعداد: %{y}<br>سهم از کل: %{customdata[0]}%<extra></extra>")
-                            fig_pareto.update_layout(
-                                font=dict(family="B Nazanin, Tahoma", size=12, color="black"),
-                                plot_bgcolor='#ffffff', paper_bgcolor='#ffffff', height=fixed_chart_height,
-                                xaxis=dict(title="", tickangle=-45, tickfont=dict(size=13, weight="bold", color="#000000"), showline=True, linecolor="black", linewidth=2, automargin=True),
-                                yaxis=dict(title="", showgrid=False, showticklabels=True, tickfont=dict(size=12, weight="bold", color="#000000"), range=[0, max_val * 1.35]),
-                                margin=dict(t=40, b=130, l=80, r=20), showlegend=False, coloraxis_showscale=False
-                            )
-                            st.plotly_chart(fig_pareto, use_container_width=True, key="pareto_chart_margin_fix", theme=None)
-                        else:
-                            st.error("داده‌های پارتو یافت نشد.")
+                            r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
+                            with r2_c1:
+                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);"><div class="watermark-icon">🏃</div><div class="card-content"><div class="g-title">انصراف داوطلب</div><div class="g-value">{total_withdrawal}</div><div class="g-sub">خروج از فرآیند</div>{gender_html_withdrawal}</div></div>""", unsafe_allow_html=True)
+                            with r2_c2:
+                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);"><div class="watermark-icon">🤝</div><div class="card-content"><div class="g-title">جذب موفق</div><div class="g-value">{total_hired}</div><div class="g-sub">جذب موفق</div>{gender_html_hired}</div></div>""", unsafe_allow_html=True)
+                            with r2_c3:
+                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);"><div class="watermark-icon">🏆</div><div class="card-content"><div class="g-title">واحد برتر جذب</div><div class="g-value">{top_hired_count}</div><div class="g-sub">{top_hired_unit}</div>{gender_html_top_unit}</div></div>""", unsafe_allow_html=True)
+                            with r2_c4:
+                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #eceff1 0%, #cfd8dc 100%);"><div class="watermark-icon">⚖️</div><div class="card-content"><div class="g-title">شاخص بازدهی جذب</div><div class="g-value">{effort_text}</div><div style="margin-top:auto; font-size:15px; color:#455a64; background:rgba(255,255,255,0.6); padding:4px 8px; border-radius:6px; text-align:center;">بررسی به ازای ۱ استخدام</div></div></div>""", unsafe_allow_html=True)
 
-                    # =====================================================
-                    # ردیف دوم: تحلیل‌های هوشمند (تراز شده)
-                    # =====================================================
-                    st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
-                    c_an_right, c_an_left = st.columns([2, 1])
+                            st.markdown("<div style='margin-bottom: 25px;'></div>", unsafe_allow_html=True)
 
-                    # --- تحلیل ساده و کاربردی نمودار سوم (راست) ---
-                    with c_an_right:
-                        try:
-                            # 1. محاسبات امن (با استفاده از جستجوی متنی منعطف)
-                            total_c = len(churn_df)
-                            
-                            # شمارش منعطف: هر سلولی که شامل کلمه باشد را می‌شمارد
-                            status_str = churn_df['وضعیت نهایی'].astype(str)
-                            rej_count = len(churn_df[status_str.str.contains('رد|عدم|کنسل|reject', case=False, na=False)])
-                            wdr_count = len(churn_df[status_str.str.contains('انصراف|withdrawal', case=False, na=False)])
-                            
-                            # جلوگیری از تقسیم بر صفر
-                            if total_c > 0:
-                                rr = int((rej_count / total_c) * 100)
-                                wr = int((wdr_count / total_c) * 100)
+                            # =========================================================
+                            # 🧠 بخش اتاق فکر (استایل آبی، همیشه باز، متن درشت)
+                            # =========================================================
+                            if withdrawal_rate > rejection_rate:
+                                main_insight = "⚠️ **چالش برند کارفرمایی:** نرخ انصراف بیشتر از نرخ رد شدن است. سازمان در «جذب» مشکل ندارد اما در «متقاعدسازی و نگهداشت» کاندیداها چالش دارد."
+                                action_item = "بررسی رقابتی بودن حقوق و مزایا."
+                                sentiment_color = "#fff3cd"
+                            elif rejection_rate > 70:
+                                main_insight = "⚠️ **چالش کانال‌های ورودی:** نرخ رد شدن بسیار بالاست (بیش از ۷۰٪). زمان زیادی صرف مصاحبه با افراد نامرتبط می‌شود."
+                                action_item = "اصلاح شرح شغل در آگهی‌ها + استفاده از فیلترهای اولیه دقیق‌تر."
+                                sentiment_color = "#f8d7da"
                             else:
-                                rr = 0; wr = 0
-                            
-                            # پیدا کردن واحدی که بیشترین مشکل را دارد
-                            if not churn_df.empty:
-                                top_unit = churn_df['واحد'].value_counts().idxmax()
-                            else:
-                                top_unit = "---"
-                            
-                            # 2. منطق تحلیل ساده
-                            if wr > rr:
-                                state_title = "📉 چالش جذابیت شغلی"
-                                state_desc = "تعداد **انصرافی‌ها** بیشتر است. متقاضیان شرایط (حقوق/ساعت) را نمی‌پسندند."
-                                bg_color = "#fff3e0"; border_color = "#ef6c00"; icon = "⚠️"
-                                action = "آیا حقوق و مزایا رقابتی است؟"
-                            elif rr > wr:
-                                state_title = "🔍 ورودی‌های نامناسب"
-                                state_desc = "تعداد **رد شدگان** بیشتر است. رزومه‌های غیرمرتبط زیادی دریافت می‌کنید."
-                                bg_color = "#ffebee"; border_color = "#c62828"; icon = "🚫"
-                                action = "شرایط احراز شغل را شفاف‌تر کنید."
-                            else:
-                                state_title = "⚖️ وضعیت متعادل"
-                                state_desc = "نرخ رد و انصراف تقریباً برابر است."
-                                bg_color = "#e8f5e9"; border_color = "#2e7d32"; icon = "✅"
-                                action = "فرآیند فعلی مطلوب است."
+                                main_insight = "✅ **تعادل پایدار:** نسبت‌های جذب، رد و انصراف در وضعیت نرمال و سالمی قرار دارند."
+                                action_item = "حفظ رویه فعلی و تمرکز بر کاهش زمان استخدام."
+                                sentiment_color = "#d4edda"
 
-                            # 3. نمایش (داخل Expander)
-                            with st.expander(" ⚖️ترازنامه رد و انصراف ", expanded=False):
-                                st.markdown(f"""
-                                <div style="font-size: 13px; line-height: 2.2; direction: rtl; text-align: justify; color: #333;">
-                                    <div style="background-color: {bg_color}; border-right: 4px solid {border_color}; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
-                                        <div style="font-weight: bold; color: {border_color}; font-size: 14px; margin-bottom: 5px;">
-                                            {icon} {state_title}
+                            st.markdown("""
+                            <style>
+                                div[data-testid="stExpander"] details > summary {
+                                    background-color: #033270 !important;
+                                    color: white !important;
+                                    border-radius: 10px !important;
+                                    padding: 12px 15px !important;
+                                    border: 1px solid #033270 !important;
+                                    margin-bottom: 0px !important;
+                                }
+                                div[data-testid="stExpander"] details > summary span, 
+                                div[data-testid="stExpander"] details > summary p, 
+                                div[data-testid="stExpander"] details > summary svg {
+                                    color: white !important;
+                                    fill: white !important;
+                                    font-weight: 900 !important;
+                                    font-size: 16px !important;
+                                }
+                                div[data-testid="stExpander"] details > div {
+                                    background-color: #ffffff !important;
+                                    border: 2px solid #033270 !important;
+                                    border-radius: 0 0 10px 10px !important;
+                                    border-top: none !important;
+                                    margin-top: -5px !important;
+                                    padding-top: 15px !important;
+                                }
+                                div[data-testid="stExpander"] details[open] > summary {
+                                    border-bottom-left-radius: 0 !important;
+                                    border-bottom-right-radius: 0 !important;
+                                    border-bottom: 1px solid #033270 !important;
+                                }
+                            </style>
+                            """, unsafe_allow_html=True)
+
+                            with st.expander("🧠اتاق فکر و بینش", expanded=True):
+                                ac1, ac2, ac3 = st.columns([1.5, 1.5, 1])
+                                
+                                with ac1:
+                                    st.markdown(f"""
+                                    <div style="direction: rtl; text-align: right; height: 100%;">
+                                        <h5 style="color: #033270; border-bottom: 2px solid #eee; padding-bottom: 8px; font-weight: 900; font-size: 16px;">📊 تفسیر قیف جذب</h5>
+                                        <ul style="font-size: 14px; line-height: 2.4; color: #222; font-weight: bold; margin-top: 10px;">
+                                            <li>کارایی سیستم: برای هر استخدام نهایی، <b style="color:#033270; font-size: 15px;">{selection_ratio.split(':')[1] if ':' in selection_ratio else 0}</b> مصاحبه انجام شده است.</li>
+                                            <li>کیفیت ورودی: <b style="color:#c0392b; font-size: 15px;">{rejection_rate:.1f}٪</b> از متقاضیان رد شدند.</li>
+                                            <li>جذابیت سازمان: <b style="color:#f39c12; font-size: 15px;">{withdrawal_rate:.1f}٪</b> از افراد تایید شده، انصراف دادند.</li>
+                                        </ul>
+                                    </div>""", unsafe_allow_html=True)
+                                
+                                with ac2:
+                                    st.markdown(f"""
+                                    <div style="direction: rtl; text-align: right; height: 100%;">
+                                        <h5 style="color: #033270; border-bottom: 2px solid #eee; padding-bottom: 8px; font-weight: 900; font-size: 16px;">💡 تجویز مدیریتی</h5>
+                                        <div style="background-color: {sentiment_color}; padding: 12px; border-radius: 8px; font-size: 14px; line-height: 1.8; color: #000; font-weight: bold;">
+                                            {main_insight}
                                         </div>
-                                        {state_desc}
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; text-align: center; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 10px;">
-                                        <div><div style="color: #666; font-size: 11px;">نرخ انصراف</div><div style="font-weight: bold; color: #ef6c00; font-size: 16px;">{wr}%</div></div>
-                                        <div><div style="color: #666; font-size: 11px;">نرخ رد شدن</div><div style="font-weight: bold; color: #c62828; font-size: 16px;">{rr}%</div></div>
-                                        <div><div style="color: #666; font-size: 11px;">واحد پرچالش</div><div style="font-weight: bold; color: #333; font-size: 14px;">{top_unit}</div></div>
-                                    </div>
-                                    <div><b>💡 پیشنهاد:</b> <span style="color: {border_color};">{action}</span></div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                        except Exception as e:
-                            st.error(f"خطا در تحلیل: {e}")
-                    # --- تحلیل حرفه‌ای نمودار چهارم (چپ) ---
-                with c_an_left:
-                        if 'علت' in pareto_df.columns and not pareto_df.empty:
-                            # محاسبات پارتو
-                            top_cause = pareto_df.iloc[0]
-                            top3_df = pareto_df.head(3)
-                            cumulative_impact = top3_df['درصد_از_کل'].sum()
-                            top_cause_name = top_cause['علت']
-                            top_cause_impact = top_cause['درصد_از_کل']
-                            
-                            # دیکشنری راهکارها
-                            solution_map = {
-                                'حقوق': ("بازنگری در جبران خدمات", "بنچ‌مارک مجدد حقوق با بازار و بررسی مزایا."),
-                                'مسیر': ("موانع لجستیکی", "بررسی سرویس ایاب و ذهاب."),
-                                'فنی': ("شکاف مهارتی", "بازنگری شرح شغل (JD)."),
-                                'ساعت': ("تعادل کار و زندگی", "شفاف‌سازی شرایط کار در آگهی."),
-                                'محیط': ("برند کارفرمایی", "بهبود فضای کاری و فرهنگ سازمانی."),
-                                'عدم تایید': ("کیفیت ورودی", "اصلاح فیلترهای اولیه.")
-                            }
-                            
-                            strategic_action = ("بررسی مصاحبه خروج", "انجام مصاحبه عمیق با افراد انصرافی.")
-                            for key, value in solution_map.items():
-                                if key in str(top_cause_name):
-                                    strategic_action = value
-                                    break
-                            
-                            if cumulative_impact >= 80: focus_msg = "🔴 **تمرکز حیاتی:**"
-                            elif cumulative_impact >= 50: focus_msg = "🟠 **تمرکز بالا:**"
-                            else: focus_msg = "🟡 **پراکندگی دلایل:**"
+                                        <div style="margin-top: 12px; font-size: 14px; font-weight: 900; color: #033270;">
+                                            🚀 اقدام پیشنهادی:<br>
+                                            <span style="font-weight: bold; color: #333; font-size: 14px;">{action_item}</span>
+                                        </div>
+                                    </div>""", unsafe_allow_html=True)
+                                
+                                with ac3:
+                                    st.markdown(f"""
+                                    <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding-top: 5px;">
+                                        <div style="font-size: 14px; color: #222; margin-bottom: 8px; font-weight: 900;">شاخص کیفیت جذب</div>
+                                        <div style="width: 85px; height: 85px; border-radius: 50%; background: conic-gradient(#2ecc71 {health_score}%, #eee 0); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                                            <div style="width: 70px; height: 70px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 22px; color: #2ecc71;">{health_score}</div>
+                                        </div>
+                                        <div style="font-size: 13px; color: #555; margin-top: 8px; font-weight: bold;">از 100</div>
+                                    </div>""", unsafe_allow_html=True)
 
-                            with st.expander("🩺 عارضه‌یابی ریشه‌ای و تجویز راهبردی ", expanded=False):
-                                st.markdown(f"""
-                                <div style="font-size: 13px; line-height: 2.4; text-align: justify; direction: rtl; color: #333;">
-                                    <div style="background-color: #f8f9fa; border-right: 4px solid #d35400; padding: 10px 12px; border-radius: 4px; margin-bottom: 10px;">
-                                        <div style="color: #d35400; font-weight: bold; font-size: 13px; margin-bottom: 3px;">⚠️ گلوگاه اصلی: {top_cause_name}</div>
-                                        عامل <b>«{top_cause_name}»</b> مسئول <b>{top_cause_impact:.1f}٪</b> از کل شکست‌هاست.
+                            st.markdown("<hr style='margin: 30px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+
+                            # =========================================================
+                            # 4. نمودارها (با استایل باکس کارتی سایه‌دار)
+                            # =========================================================
+
+                            # ✅ استایل باکس‌ها بازگشت به حالت کارتی سایه‌دار و خط جداکننده
+                            st.markdown("""
+                            <style>
+                                .analysis-box {
+                                    background-color: #ffffff;
+                                    border: 1px solid #cfd8dc;
+                                    border-radius: 16px;
+                                    padding: 20px 20px;
+                                    height: 480px !important;
+                                    overflow-y: auto;
+                                    direction: rtl;
+                                    text-align: right;
+                                    /* 👇 سایه و استایل کارتی */
+                                    box-shadow: 0 10px 25px rgba(0,0,0,0.08); 
+                                    border-right: 6px solid #033270;
+                                }
+                                .analysis-title {
+                                    color: #033270;
+                                    font-weight: 900;
+                                    font-size: 1.25rem;
+                                    margin-bottom: 15px;
+                                    /* 👇 خط جداکننده زیر تیتر */
+                                    border-bottom: 2px solid #e0e0e0;
+                                    padding-bottom: 10px;
+                                    font-family: 'B Nazanin';
+                                }
+                                .analysis-content {
+                                    font-size: 16px !important;
+                                    line-height: 1.8 !important;
+                                    color: #333; /* رنگ متن */
+                                    font-family: 'B Nazanin';
+                                    text-align: justify;
+                                }
+                                .analysis-content ul {
+                                    margin-top: 5px; margin-bottom: 5px; padding-right: 20px;
+                                }
+                            </style>
+                            """, unsafe_allow_html=True)
+
+                            # --- ردیف ۱: قیف جذب ---
+                            df_chart_all = pd.DataFrame()
+                            avg_conversion = 0; iph = 0; best_unit = None; worst_unit = None
+                            
+                            if 'واحد' in df_emp.columns:
+                                interview_counts = df_emp['واحد'].value_counts()
+                                if 'تاریخ شروع بکار' in df_emp.columns:
+                                    hired_mask = (df_emp['تاریخ شروع بکار'].notna()) & \
+                                                (~df_emp['تاریخ شروع بکار'].astype(str).str.contains('عدم استخدام|نامشخص', case=False, na=False))
+                                    hired_counts = df_emp.loc[hired_mask, 'واحد'].value_counts()
+                                else: hired_counts = pd.Series()
+                                df_chart_all = pd.DataFrame({'Interview': interview_counts, 'Hired': hired_counts}).fillna(0)
+                                df_chart_all['Hired'] = df_chart_all['Hired'].astype(int)
+                                df_chart_all['Rate'] = (df_chart_all['Hired'] / df_chart_all['Interview'] * 100).fillna(0).round(1)
+                                total_int = df_chart_all['Interview'].sum(); total_h = df_chart_all['Hired'].sum()
+                                avg_conversion = (total_h / total_int * 100) if total_int > 0 else 0
+                                iph = (total_int / total_h) if total_h > 0 else total_int
+                                if not df_chart_all.empty:
+                                    q_df = df_chart_all[df_chart_all['Interview'] >= 3]
+                                    if not q_df.empty:
+                                        best_unit = q_df.sort_values('Rate', ascending=False).iloc[0]
+                                        worst_unit = q_df.sort_values('Rate', ascending=True).iloc[0]
+
+                            c1_right, c1_left = st.columns([2.2, 1])
+                            
+                            with c1_right:
+                                if not df_chart_all.empty:
+                                    df_plot = df_chart_all.sort_values('Interview', ascending=False)
+                                    fig_ov = go.Figure()
+                                    fig_ov.add_trace(go.Bar(
+                                        x=df_plot.index, y=df_plot['Interview'], name='کل متقاضیان',
+                                        marker_color='rgba(189, 195, 199, 0.5)', width=0.75, marker_line_width=0,
+                                        hovertemplate='<span style="color:black; font-family:B Nazanin; font-size:14px;"><b>کل متقاضیان</b>: %{y} نفر</span><br><span style="color:black; font-family:B Nazanin; font-size:14px;"><b>واحد</b>: %{x}</span><extra></extra>'
+                                    ))
+                                    fig_ov.add_trace(go.Bar(
+                                        x=df_plot.index, y=df_plot['Hired'], name='جذب موفق',
+                                        marker_color='#033270', width=0.35, text=df_plot['Hired'], textposition='outside',
+                                        textfont=dict(color='black', size=14, weight='bold'), marker_line_width=0,
+                                        hovertemplate='<span style="color:black; font-family:B Nazanin; font-size:14px;"><b>جذب موفق</b>: %{y} نفر</span><br><span style="color:black; font-family:B Nazanin; font-size:14px;"><b>نرخ تبدیل</b>: %{customdata}%</span><extra></extra>',
+                                        customdata=df_plot['Rate']
+                                    ))
+                                    fig_ov.update_layout(
+                                        title={'text': '📊 کارنامه جذب واحدها', 'y': 0.95, 'x': 1, 'xanchor': 'right', 'xref': 'paper'},
+                                        title_font=dict(size=22, family="B Nazanin", color="black", weight="bold"),
+                                        font=dict(family="B Nazanin", color="black"),
+                                        plot_bgcolor='white', paper_bgcolor='white',
+                                        height=480, barmode='overlay',
+                                        hoverlabel=dict(bgcolor="#E3F2FD", bordercolor="#2E86C1", font=dict(color="black", family="B Nazanin", size=14)),
+                                        xaxis=dict(tickangle=-45, showline=False, showgrid=False, tickfont=dict(color='black', size=14)),
+                                        yaxis=dict(showline=False, showgrid=True, gridcolor='#eee', tickfont=dict(color='black', size=14)),
+                                        legend=dict(orientation="h", y=1.1, x=0, font=dict(color='black', size=14)),
+                                        margin=dict(t=60, b=80, l=40, r=20)
+                                    )
+                                    st.plotly_chart(fig_ov, use_container_width=True)
+                                else: st.info("داده موجود نیست")
+
+                            with c1_left:
+                                if best_unit is not None:
+                                    gap = best_unit['Rate'] - avg_conversion
+                                    eff_status = "مطلوب" if iph < 6 else ("نیازمند بهبود" if iph < 12 else "بحرانی")
+                                    html_1 = f"""
+                                    <div class="analysis-title">🎯 تابلوی فرمان شاخص‌ها</div>
+                                    <div class="analysis-content">
+                                        <ul style="list-style-type:none; padding:0; margin:0 0 10px 0;">
+                                            <li><b>میانگین تبدیل:</b> <span style="color:#000000; font-weight:bold;">{avg_conversion:.1f}%</span></li>
+                                            <li><b>شاخص تلاش (IPH):</b> <span style="color:#000000; font-weight:bold;">{iph:.1f}</span></li>
+                                        </ul>
+                                        <p>وضعیت غربالگری در حالت <b>«{eff_status}»</b> است. یعنی برای ۱ استخدام، {int(iph)} مصاحبه انجام شده است.</p>
+                                        <div style="background:#e8f5e9; padding:8px; border-radius:8px; margin-top:8px; color:black;">
+                                            🌟 <b>ستاره جذب:</b><br> واحد <b>{best_unit.name}</b> با نرخ {best_unit['Rate']}% عملکردی درخشان داشته است.
+                                        </div>
+                                        <div style="background:#fff3e0; padding:8px; border-radius:8px; margin-top:8px; color:black;">
+                                            ⚠️ <b>نیاز به بازنگری:</b><br> واحد <b>{worst_unit.name if worst_unit is not None else '-'}</b> بیشترین هدررفت زمان مصاحبه را دارد.
+                                        </div>
                                     </div>
-                                    <div style="margin-bottom: 8px;">
-                                        <b>📊 تحلیل پارتو:</b><br>
-                                        {focus_msg} ۳ عامل اول، <b>{cumulative_impact:.1f}٪</b> مشکلات را ایجاد کرده‌اند.
+                                    """
+                                    st.markdown(f'<div class="analysis-box">{html_1}</div>', unsafe_allow_html=True)
+                                else: st.markdown(f'<div class="analysis-box">داده کافی نیست.</div>', unsafe_allow_html=True)
+
+                            st.markdown("<hr style='margin: 30px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+
+                            # --- ردیف ۲: کانال‌های جذب ---
+                            ref_df = pd.DataFrame()
+                            if 'معرف' in df_emp.columns:
+                                df_emp['معرف'] = df_emp['معرف'].fillna('نامشخص').astype(str)
+                                referrer_total = df_emp['معرف'].value_counts()
+                                if 'تاریخ شروع بکار' in df_emp.columns:
+                                    hired_ref = df_emp[
+                                        (df_emp['تاریخ شروع بکار'].notna()) & 
+                                        (~df_emp['تاریخ شروع بکار'].astype(str).str.contains('عدم استخدام|نامشخص', case=False, na=False))
+                                    ]['معرف'].value_counts()
+                                else: hired_ref = pd.Series()
+                                ref_df = pd.DataFrame({'کل معرفی': referrer_total}).reset_index()
+                                ref_df.columns = ['معرف', 'کل معرفی']
+                                ref_df['جذب شده'] = ref_df['معرف'].map(hired_ref).fillna(0)
+                                ref_df['نرخ تبدیل'] = (ref_df['جذب شده'] / ref_df['کل معرفی'] * 100).fillna(0)
+
+                            c2_right, c2_left = st.columns([2.2, 1])
+
+                            with c2_right:
+                                if not ref_df.empty:
+                                    plot_df = ref_df[ref_df['کل معرفی'] > 0].sort_values('جذب شده', ascending=False).head(8)
+                                    fig_ref = go.Figure()
+                                    fig_ref.add_trace(go.Bar(
+                                        x=plot_df['معرف'], y=plot_df['کل معرفی'], name='تعداد ورودی', 
+                                        marker_color='#4FC3F7', text=plot_df['کل معرفی'], textposition='outside',
+                                        textfont=dict(color='black', size=14, weight='bold'), marker_line_width=0,
+                                        hovertemplate='<span style="color:black; font-family:B Nazanin; font-size:14px;"><b>تعداد ورودی</b>: %{y} نفر</span><br><span style="color:black; font-family:B Nazanin; font-size:14px;"><b>کانال</b>: %{x}</span><extra></extra>'
+                                    ))
+                                    fig_ref.add_trace(go.Scatter(
+                                        x=plot_df['معرف'], y=plot_df['جذب شده'], name='استخدام موفق', 
+                                        mode='lines+markers+text', text=plot_df['جذب شده'], textposition='top center',
+                                        line=dict(color='#0D47A1', width=3), textfont=dict(color='black', size=14, weight='bold'),
+                                        hovertemplate='<span style="color:black; font-family:B Nazanin; font-size:14px;"><b>استخدام موفق</b>: %{y} نفر</span><br><span style="color:black; font-family:B Nazanin; font-size:14px;"><b>کانال</b>: %{x}</span><extra></extra>'
+                                    ))
+                                    fig_ref.update_layout(
+                                        title={'text': '💎 عملکرد کانال‌های جذب نیرو', 'y': 0.95, 'x': 1, 'xanchor': 'right', 'xref': 'paper'},
+                                        title_font=dict(size=22, family="B Nazanin", color="black", weight="bold"),
+                                        font=dict(family="B Nazanin", color="black"),
+                                        plot_bgcolor='white', paper_bgcolor='white',
+                                        height=480,
+                                        hoverlabel=dict(bgcolor="#E3F2FD", bordercolor="#2E86C1", font=dict(color="black", family="B Nazanin", size=14)),
+                                        xaxis=dict(showline=False, showgrid=False, tickfont=dict(color='black', size=14)),
+                                        yaxis=dict(showline=False, showgrid=True, gridcolor='#eee', tickfont=dict(color='black', size=14)),
+                                        legend=dict(orientation="h", y=1.1, x=0, font=dict(color='black', size=14)),
+                                        margin=dict(t=60, b=50, l=40, r=40)
+                                    )
+                                    st.plotly_chart(fig_ref, use_container_width=True)
+                                else: st.info("داده کانال موجود نیست")
+
+                            with c2_left:
+                                if not ref_df.empty:
+                                    top_vol = ref_df.sort_values('کل معرفی', ascending=False).iloc[0]
+                                    top_qual = ref_df[ref_df['کل معرفی'] >= 3].sort_values('نرخ تبدیل', ascending=False).iloc[0] if len(ref_df[ref_df['کل معرفی'] >= 3])>0 else top_vol
+                                    top5 = ref_df[['معرف', 'نرخ تبدیل']].sort_values('نرخ تبدیل', ascending=False).head(5)
+                                    top5_html = "".join([f"<li style='display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding:2px 0;'><span>{r['معرف']}</span><b>{r['نرخ تبدیل']:.0f}%</b></li>" for _,r in top5.iterrows()])
+                                    html_2 = f"""
+                                    <div class="analysis-title">📊 تحلیل کانال‌های ورودی</div>
+                                    <div class="analysis-content">
+                                        <ul style="list-style-type:none; padding:0; margin:0;">
+                                            <li>🔹 <b>منبع حجمی:</b> کانال <b>«{top_vol['معرف']}»</b> با {int(top_vol['کل معرفی'])} رزومه.</li>
+                                            <li>🔸 <b>منبع کیفی:</b> کانال <b>«{top_qual['معرف']}»</b> با نرخ <b>{top_qual['نرخ تبدیل']:.1f}%</b>.</li>
+                                        </ul>
+                                        <div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-top:10px; color:black;">
+                                            <b>🏆 رده‌بندی کیفیت (Top 5):</b>
+                                            <ul style="list-style-type:none; padding:0; margin:5px 0 0 0;">{top5_html}</ul>
+                                        </div>
                                     </div>
-                                    <div style="border-top: 1px dashed #ccc; margin-top: 10px; padding-top: 10px;">
-                                        <b>🚀 تجویز ({strategic_action[0]}):</b><br>
-                                        <span style="color: #2c3e50;">{strategic_action[1]}</span>
+                                    """
+                                    st.markdown(f'<div class="analysis-box">{html_2}</div>', unsafe_allow_html=True)
+                                else: st.markdown(f'<div class="analysis-box">داده کافی نیست.</div>', unsafe_allow_html=True)
+
+                            st.markdown("<hr style='margin: 30px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+
+                            # =========================================================
+                            # داده‌های ریزش (مشترک ردیف ۳ و ۴)
+                            # =========================================================
+                            status_col = df_emp['وضعیت نهایی'] if 'وضعیت نهایی' in df_emp.columns else pd.Series()
+                            churn_mask = status_col.astype(str).str.strip().isin(['رد شد', 'انصراف داد'])
+                            churn_df = df_emp[churn_mask].copy()
+
+                            if len(churn_df) > 0:
+                                if 'علت نپذیرفتن' in churn_df.columns:
+                                    churn_df['علت نپذیرفتن'] = churn_df['علت نپذیرفتن'].fillna('نامشخص')
+                                    churn_df['علت_دسته_بندی_شده'] = churn_df['علت نپذیرفتن'].apply(categorize_rejection_reason)
+                                else: churn_df['علت_دسته_بندی_شده'] = 'نامشخص'
+
+                                            # ---------------------------------------------------------
+                                # ردیف ۳: نقشه حرارتی (Heatmap) - اصلاح رنگ‌بندی به آبی (تم داشبورد)
+                                # ---------------------------------------------------------
+                                c3_right, c3_left = st.columns([2.2, 1])
+
+                                with c3_right:
+                                    f_col, t_col = st.columns([1, 2])
+                                    with t_col: 
+                                        st.markdown("<h5 style='color:#033270; margin:0;'>نقشه حرارتی ریزش نیرو 🗺️</h5>", unsafe_allow_html=True)
+                                    
+                                    with f_col: 
+                                        selected_view = st.selectbox(
+                                            "سطح نمایش:", 
+                                            ["👁️ نمای کلان (وضعیت)", "📂 علل دسته‌بندی شده", "📝 علل دقیق (با جزئیات)"], 
+                                            key="lvl_select", 
+                                            label_visibility="collapsed"
+                                        )
+                                    
+                                    import textwrap
+                                    if "نمای کلان" in selected_view:
+                                        # سطح ۱: وضعیت نهایی
+                                        plot_df = churn_df.copy()
+                                        y_col = 'وضعیت نهایی'
+                                        color_col = 'وضعیت نهایی'
+                                        color_scale = None
+                                        # 👇 تغییر رنگ به تم آبی داشبورد
+                                        color_map = {'رد شد': '#033270', 'انصراف داد': '#4FC3F7'} 
+                                    
+                                    elif "دسته‌بندی" in selected_view:
+                                        # سطح ۲: دسته‌بندی هوشمند
+                                        plot_df = churn_df.copy()
+                                        y_col = 'علت_دسته_بندی_شده'
+                                        color_col = 'تعداد'
+                                        # 👇 تغییر طیف رنگی به آبی
+                                        color_scale = 'Blues'
+                                        color_map = None
+                                    
+                                    else:
+                                        # سطح ۳: علت دقیق
+                                        plot_df = churn_df.copy()
+                                        y_col = 'علت نپذیرفتن'
+                                        color_col = 'تعداد'
+                                        # 👇 تغییر طیف رنگی به آبی
+                                        color_scale = 'Blues'
+                                        color_map = None
+
+                                    if y_col not in plot_df.columns: plot_df[y_col] = "نامشخص"
+                                    
+                                    chart_data = plot_df.groupby([y_col, 'واحد']).size().reset_index(name='تعداد')
+                                    chart_data['نمایش_محور'] = chart_data[y_col].apply(lambda x: '<br>'.join(textwrap.wrap(str(x), width=35)))
+                                    
+                                    fig_heat = px.scatter(
+                                        chart_data, x='واحد', y='نمایش_محور', size='تعداد', 
+                                        color=color_col, color_continuous_scale=color_scale, color_discrete_map=color_map,
+                                        size_max=45, text='تعداد',
+                                        custom_data=[chart_data[y_col]]
+                                    )
+                                    
+                                    fig_heat.update_traces(
+                                        textposition='top center', cliponaxis=False,
+                                        textfont=dict(family="B Nazanin", size=14, weight="bold", color="black"),
+                                        marker=dict(line=dict(width=0)),
+                                        hovertemplate='<span style="color:black; font-family:B Nazanin; font-size:14px;"><b>تعداد</b>: %{text} نفر</span><br><span style="color:black; font-family:B Nazanin; font-size:14px;"><b>واحد</b>: %{x}</span><br><span style="color:black; font-family:B Nazanin; font-size:14px;"><b>علت</b>: %{customdata[0]}</span><extra></extra>'
+                                    )
+                                    
+                                    fig_heat.update_layout(
+                                        font=dict(family="B Nazanin", color="black"),
+                                        plot_bgcolor='white', paper_bgcolor='white',
+                                        height=480,
+                                        hoverlabel=dict(bgcolor="#E3F2FD", bordercolor="#2E86C1", font=dict(color="black", family="B Nazanin", size=14)),
+                                        xaxis=dict(tickangle=-45, showline=False, showgrid=True, gridcolor='#f0f0f0', tickfont=dict(color='black', size=14)),
+                                        yaxis=dict(showline=False, showgrid=True, gridcolor='#f0f0f0', tickfont=dict(color='black', size=16, weight="bold")),
+                                        legend=dict(orientation="h", y=1.1, font=dict(color='black', size=14)),
+                                        margin=dict(t=50, b=80, l=150, r=20)
+                                    )
+                                    st.plotly_chart(fig_heat, use_container_width=True)
+
+                                with c3_left:
+                                    status_str = churn_df['وضعیت نهایی'].astype(str)
+                                    rej_c = len(churn_df[status_str.str.contains('رد', case=False)])
+                                    wdr_c = len(churn_df[status_str.str.contains('انصراف', case=False)])
+                                    tot_c = len(churn_df)
+                                    rr = int((rej_c/tot_c)*100) if tot_c>0 else 0
+                                    wr = int((wdr_c/tot_c)*100) if tot_c>0 else 0
+                                    top_churn_unit = churn_df['واحد'].value_counts().idxmax() if not churn_df.empty else "-"
+
+                                    if wr > rr:
+                                        state_t = "چالش جذابیت"; icon = "⚠️"; color = "#ef6c00"; msg = "انصراف بالاست. شرایط کاری جذاب نیست."
+                                    elif rr > wr:
+                                        state_t = "ورودی نامناسب"; icon = "🚫"; color = "#c62828"; msg = "رد شدن بالاست. فیلتر ورودی دقیق نیست."
+                                    else:
+                                        state_t = "وضعیت متعادل"; icon = "⚖️"; color = "#2e7d32"; msg = "توزیع نرمال است."
+
+                                    html_3 = f"""
+                                    <div class="analysis-title">⚖️ ترازنامه رد و انصراف</div>
+                                    <div class="analysis-content">
+                                        <div style="display:flex; justify-content:space-between; margin-bottom:10px; text-align:center;">
+                                            <div style="background:#fff3e0; padding:8px; border-radius:8px; width:48%;">
+                                                <span style="font-size:12px;">انصراف</span><br><b style="font-size:20px; color:#ef6c00;">{wr}%</b>
+                                            </div>
+                                            <div style="background:#ffebee; padding:8px; border-radius:8px; width:48%;">
+                                                <span style="font-size:12px;">رد شده</span><br><b style="font-size:20px; color:#c62828;">{rr}%</b>
+                                            </div>
+                                        </div>
+                                        <div style="background:#f9f9f9; padding:10px; border-radius:6px; border-right:4px solid {color}; margin-bottom:10px;">
+                                            <b style="color:{color}; font-size:16px;">{icon} {state_t}</b><br>{msg}
+                                        </div>
+                                        <div style="font-size:14px; color:#666;">
+                                            🏭 <b>واحد پرچالش:</b><br> واحد «{top_churn_unit}» بیشترین ریزش را دارد.
+                                        </div>
                                     </div>
-                                </div>
-                                """, unsafe_allow_html=True)
+                                    """
+                                    st.markdown(f'<div class="analysis-box">{html_3}</div>', unsafe_allow_html=True)
+
+                                st.markdown("<hr style='margin: 30px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+
+            # ---------------------------------------------------------
+                                # ردیف ۴: پارتو (Pareto) - اصلاح رنگ برای وضوح بیشتر ستون‌های آخر
+                                # ---------------------------------------------------------
+                                c4_right, c4_left = st.columns([2.2, 1])
+
+                                with c4_right:
+                                    pareto_df = churn_df['علت_دسته_بندی_شده'].value_counts().head(5).reset_index()
+                                    pareto_df.columns = ['علت', 'تعداد']
+                                    pareto_df['درصد'] = ((pareto_df['تعداد'] / tot_c) * 100).round(1)
+                                    max_val = pareto_df['تعداد'].max() if not pareto_df.empty else 10
+
+                                    # 👇 تغییر مهم: تعریف طیف رنگی دستی (از آبی خوش‌رنگ تا سرمه‌ای)
+                                    # این کار باعث می‌شود ستون‌های کوچک هم رنگ داشته باشند و سفید نشوند
+                                    fig_par = px.bar(
+                                        pareto_df, x='علت', y='تعداد', text='تعداد', 
+                                        color='تعداد', 
+                                        color_continuous_scale=[(0, "#64B5F6"), (1, "#033270")]
+                                    )
+                                    
+                                    fig_par.update_traces(
+                                        textposition='outside', marker_cornerradius=6, cliponaxis=False,
+                                        textfont=dict(color='black', size=14, weight='bold'),
+                                        marker_line_width=0,
+                                        customdata=pareto_df['درصد'],
+                                        hovertemplate='<span style="color:black; font-family:B Nazanin; font-size:14px;"><b>تعداد</b>: %{y} نفر</span><br><span style="color:black; font-family:B Nazanin; font-size:14px;"><b>علت</b>: %{x}</span><br><span style="color:black; font-family:B Nazanin; font-size:14px;"><b>سهم</b>: %{customdata}%</span><extra></extra>'
+                                    )
+                                    
+                                    fig_par.update_layout(
+                                        title={'text': '🚧 گلوگاه‌های اصلی (پارتو)', 'y': 0.95, 'x': 1, 'xanchor': 'right', 'xref': 'paper'},
+                                        title_font=dict(size=22, family="B Nazanin", color="black", weight="bold"),
+                                        font=dict(family="B Nazanin", color="black"),
+                                        plot_bgcolor='white', paper_bgcolor='white',
+                                        height=480,
+                                        hoverlabel=dict(bgcolor="#E3F2FD", bordercolor="#2E86C1", font=dict(color="black", family="B Nazanin", size=14)),
+                                        xaxis=dict(tickangle=-45, showline=False, tickfont=dict(color='black', size=14)),
+                                        yaxis=dict(showline=False, showgrid=False, range=[0, max_val * 1.35], tickfont=dict(color='black', size=14)),
+                                        coloraxis_showscale=False,
+                                        margin=dict(t=60, b=100, l=50, r=20)
+                                    )
+                                    st.plotly_chart(fig_par, use_container_width=True)
+
+                                with c4_left:
+                                    if not pareto_df.empty:
+                                        top_cause = pareto_df.iloc[0]
+                                        cause_n = top_cause['علت']; cause_p = top_cause['درصد']
+                                        
+                                        s_map = {
+                                            'حقوق': "بازنگری پکیج جبران خدمات", 'مسیر': "راه‌اندازی سرویس", 
+                                            'فنی': "سخت‌گیری در غربالگری اولیه", 'ساعت': "شفاف‌سازی شیفت کاری", 
+                                            'محیط': "بهبود برند کارفرمایی", 'عدم تایید': "دقت در انطباق رزومه با JD"
+                                        }
+                                        sol = "مصاحبه خروج دقیق"
+                                        for k,v in s_map.items(): 
+                                            if k in str(cause_n): sol=v; break
+                                        
+                                        html_4 = f"""
+                                        <div class="analysis-box">
+                                            <div class="analysis-title">🩺 عارضه‌یابی ریشه‌ای</div>
+                                            <div class="analysis-content">
+                                                <div style="background:#fff5f5; border:1px solid #ffcccc; color:#990000; padding:10px; border-radius:8px; margin-bottom:10px;">
+                                                    🚫 <b>عامل اصلی شکست:</b><br>
+                                                    علت <b>«{cause_n}»</b> به تنهایی مسئول <b>{cause_p}%</b> از کل موارد ریزش است.
+                                                </div>
+                                                <div style="margin-bottom:10px;">
+                                                    💊 <b>تجویز راهبردی:</b><br>
+                                                    <span style="color:#033270; font-weight:bold;">{sol}</span>
+                                                </div>
+                                                <p style="font-size:14px; color:#666; margin-top:10px; border-top:1px dashed #ccc; padding-top:8px;">
+                                                    طبق اصل پارتو، رفع همین یک گلوگاه نیمی از مشکلات را حل می‌کند.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        """
+                                        st.markdown(html_4, unsafe_allow_html=True)
+                                    else: st.markdown('<div class="analysis-box">داده موجود نیست.</div>', unsafe_allow_html=True)
+
+                            else: st.success("✨ داده‌ای برای تحلیل ریزش موجود نیست.")
                         else:
-                            st.info("داده‌ای برای تحلیل موجود نیست.")
-            else:
-                    st.success("✨ داده‌ای برای تحلیل ریزش موجود نیست.")
-                    
+                            st.warning("هنوز داده‌ای بارگذاری نشده است. لطفاً دکمه بارگذاری را بزنید.")
     # ---------------------------------------------------------
     # بخش 1: رویدادها
     # ---------------------------------------------------------
