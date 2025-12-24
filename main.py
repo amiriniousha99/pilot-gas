@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 import base64
 import os
 
-# این تابع در بالای فایل main.py قرار دارد
+# رنگ جداول گوگل شیت
 def style_dataframe(df):
     return df.style.set_properties(**{
         'background-color': '#F0F8FF',     # آبی ملیح برای سلول‌ها
@@ -29,6 +29,8 @@ def style_dataframe(df):
             ('font-weight', 'bold')
         ]}
     ])
+    
+#بالای سایت 
 st.set_page_config(
     page_title="سامانه پیلوت گاز",
     page_icon="assets/sitelogo.png",
@@ -73,7 +75,7 @@ if st.query_params.get("action") == "logout":
     st.session_state.user_info = None
     st.query_params.clear()
     st.rerun()
-
+#ادرس گوگل شیت
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw9VrEUyzTpbxeQf7vB8IzZ7BmmsYP65yy-dWGvTCBRLorDc8dCm0f5O3NPQxV9hXn0/exec"
 
 # =========================================================
@@ -1009,9 +1011,10 @@ def show_hr_content():
                 # 4. غربالگری (رد شده)
                 rejected_df = df_emp[df_emp['وضعیت نهایی'] == 'رد شد']
                 rejection_rate = (len(rejected_df) / total_candidates * 100) if total_candidates > 0 else 0
-                # اگر برای رد شده‌ها هم جنسیت می‌خواهید، خط زیر را فعال کنید:
-                # gender_html_rejected = get_gender_glass_html(rejected_df, "#c0392b")
-
+                
+                # 👇👇👇 این خط جدید را اضافه کنید تا آمار جنسیت ساخته شود 👇👇👇
+                gender_html_rejected = get_gender_glass_html(rejected_df, "#c0392b")
+                
                 # 5. انصراف
                 withdrawal_df = df_emp[df_emp['وضعیت نهایی'] == 'انصراف داد']
                 gender_html_withdrawal = get_gender_glass_html(withdrawal_df, "#e67e22")
@@ -1036,22 +1039,22 @@ def show_hr_content():
                 else:
                     effort_text = "---"
 
-                # =========================================================
-                # 2. نمایش کارت‌های رنگی (Soft Gradient Style)
+# =========================================================
+                # 2. استایل کارت‌های رنگی (ارتفاع ثابت ۱۷۰ - فشرده‌سازی فاصله‌ها)
                 # =========================================================
                 st.markdown("""
                 <style>
                     .gradient-card {
                         border-radius: 16px;
-                        padding: 16px;
-                        height: 170px;
+                        padding: 10px 14px !important; /* 👈 کاهش پدینگ برای فضای بیشتر */
+                        height: 170px !important;      /* 👈 ارتفاع ثابت و استاندارد */
                         display: flex;
                         flex-direction: column;
                         justify-content: space-between;
                         position: relative;
                         overflow: hidden;
-                        transition: transform 0.3s ease, box-shadow 0.3s ease;
                         border: 1px solid rgba(255,255,255,0.5);
+                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
                     }
                     
                     .gradient-card:hover {
@@ -1061,10 +1064,10 @@ def show_hr_content():
 
                     .watermark-icon {
                         position: absolute;
-                        top: -10px;
-                        left: -10px;
+                        top: -15px;
+                        left: -15px;
                         font-size: 80px;
-                        opacity: 0.1;
+                        opacity: 0.08;
                         pointer-events: none;
                         transform: rotate(15deg);
                     }
@@ -1075,30 +1078,36 @@ def show_hr_content():
                         display: flex;
                         flex-direction: column;
                         height: 100%;
+                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
                     }
 
+                    /* تیتر */
                     .g-title {
-                        font-size: 13px;
+                        font-size: 15px !important;
                         font-weight: 800;
                         color: rgba(0,0,0,0.6);
-                        text-transform: uppercase;
-                        letter-spacing: 0.5px;
-                        margin-bottom: 5px;
+                        margin: 0 !important; /* حذف فاصله اضافی */
+                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
                     }
 
+                    /* عدد اصلی */
                     .g-value {
-                        font-size: 32px;
+                        font-size: 36px !important; /* درشت و مناسب */
                         font-weight: 900;
                         color: #333;
-                        margin-bottom: 2px;
-                        text-shadow: 2px 2px 0px rgba(255,255,255,0.5);
+                        margin: 0 !important; /* حذف فاصله اضافی */
+                        line-height: 1.2 !important; /* تنظیم ارتفاع خط */
+                        text-shadow: 1px 1px 0px rgba(255,255,255,0.5);
+                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
                     }
 
+                    /* زیرنویس */
                     .g-sub {
-                        font-size: 11px;
-                        color: rgba(0,0,0,0.5);
-                        font-weight: 600;
-                        margin-bottom: auto;
+                        font-size: 13px !important;
+                        color: rgba(0,0,0,0.6);
+                        font-weight: 700;
+                        margin-bottom: auto !important;
+                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
                     }
                 </style>
                 """, unsafe_allow_html=True)
@@ -1148,7 +1157,7 @@ def show_hr_content():
                     </div>
                     """, unsafe_allow_html=True)
                 
-                with r1_c4: # رد شده
+                with r1_c4: # کارت رد شده (با آمار زن و مرد)
                     bg = "linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)"
                     st.markdown(f"""
                     <div class="gradient-card" style="background: {bg};">
@@ -1157,13 +1166,11 @@ def show_hr_content():
                             <div class="g-title">رد شده</div>
                             <div class="g-value">{total_rejected}</div>
                             <div class="g-sub">در مرحله غربالگری</div>
-                            <div style="margin-top:auto; font-size:11px; color:#b71c1c; background:rgba(255,255,255,0.5); padding:4px 8px; border-radius:6px; text-align:center;">
-                                نرخ ریزش: {rejection_rate:.1f}٪
-                            </div>
+                            
+                            {gender_html_rejected}
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-
                 # --- ردیف دوم ---
                 st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
                 r2_c1, r2_c2, r2_c3, r2_c4 = st.columns(4)
@@ -1210,17 +1217,16 @@ def show_hr_content():
                     </div>
                     """, unsafe_allow_html=True)
 
-                with r2_c4: # شاخص تلاش
+                with r2_c4: # کارایی فرآیند جذب<
                     bg = "linear-gradient(135deg, #eceff1 0%, #cfd8dc 100%)"
                     st.markdown(f"""
                     <div class="gradient-card" style="background: {bg};">
                         <div class="watermark-icon">⚖️</div>
                         <div class="card-content">
-                            <div class="g-title">شاخص تلاش</div>
+                            <div class="g-title"> کارایی فرآیند جذب</div>
                             <div class="g-value">{effort_text}</div>
-                            <div class="g-sub">بررسی به ازای ۱ استخدام</div>
-                            <div style="margin-top:auto; font-size:11px; color:#455a64; background:rgba(255,255,255,0.6); padding:4px 8px; border-radius:6px; text-align:center;">
-                                کارایی فرآیند جذب
+                            <div style="margin-top:auto; font-size:15px; color:#455a64; background:rgba(255,255,255,0.6); padding:4px 8px; border-radius:6px; text-align:center;">
+                               بررسی به ازای ۱ استخدام
                             </div>
                         </div>
                     </div>
@@ -1833,7 +1839,7 @@ def show_hr_content():
         
             # تیتر
         st.markdown("""
-            <div style="margin-top: -500px !important; padding-bottom: 10px !important;">
+            <div style="margin-top: -700px !important; padding-bottom: 10px !important;">
                 <h3 style="color: #033270; font-family: 'B Nazanin'; font-size: 2rem;">
                     📝 جذب و استخدام
                 </h3>
@@ -1884,14 +1890,55 @@ def show_hr_content():
             
             # 3. نمایش کارت‌های آمار
         
+            # 3. نمایش کارت‌های آمار (با فونت مشکی)
             col1, col2, col3, col4, col5 = st.columns(5)
-            with col1: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"><h3 style="color: white !important;">👥 نفرات مصاحبه شده</h3><div class="stat-number">{total_interviewed}</div><div class="stat-label">نفر</div></div>', unsafe_allow_html=True)
-            with col2: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"><h3 style="color: white !important;">🎯 بیشترین مصاحبه</h3><div class="stat-number">{most_interviewed_count}</div><div class="stat-label">{most_interviewed_unit} ({most_interviewed_percentage}%)</div></div>', unsafe_allow_html=True)
-            with col3: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);"><h3 style="color: white !important;">✅ استخدام شدگان</h3><div class="stat-number">{hired_count}</div><div class="stat-label">{hired_percentage}% از {total_interviewed} نفر</div></div>', unsafe_allow_html=True)
-            with col4: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);"><h3 style="color: white !important;">🏆 بیشترین استخدام</h3><div class="stat-number">{most_hired_unit}</div><div class="stat-label">مرد: {gender_percentages.get("مرد", 0)}% | زن: {gender_percentages.get("زن", 0)}%</div></div>', unsafe_allow_html=True)
-            with col5: st.markdown(f'<div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);"><h3 style="color: white !important;">❓ نامشخص</h3><div class="stat-number">{undecided_count}</div><div class="stat-label">{undecided_percentage}% از {total_interviewed} نفر</div></div>', unsafe_allow_html=True)
+            # تعریف استایل مشکی اجباری برای همه اجزا
+            black_style = "color: #000000 !important; text-shadow: none !important;"
             
-            st.markdown('<div style="margin-top: 50px;"></div>', unsafe_allow_html=True)
+            with col1: 
+                st.markdown(f'''
+                <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); {black_style}">
+                    <h3 style="{black_style}">👥 نفرات مصاحبه شده</h3>
+                    <div class="stat-number" style="{black_style}">{total_interviewed}</div>
+                    <div class="stat-label" style="{black_style}">نفر</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            with col2: 
+                st.markdown(f'''
+                <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); {black_style}">
+                    <h3 style="{black_style}">🎯 بیشترین مصاحبه</h3>
+                    <div class="stat-number" style="{black_style}">{most_interviewed_count}</div>
+                    <div class="stat-label" style="{black_style}">{most_interviewed_unit} ({most_interviewed_percentage}%)</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            with col3: 
+                st.markdown(f'''
+                <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); {black_style}">
+                    <h3 style="{black_style}">✅ استخدام شدگان</h3>
+                    <div class="stat-number" style="{black_style}">{hired_count}</div>
+                    <div class="stat-label" style="{black_style}">{hired_percentage}% از {total_interviewed} نفر</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            with col4: 
+                st.markdown(f'''
+                <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); {black_style}">
+                    <h3 style="{black_style}">🏆 بیشترین استخدام</h3>
+                    <div class="stat-number" style="{black_style}">{most_hired_unit}</div>
+                    <div class="stat-label" style="{black_style}">مرد: {gender_percentages.get("مرد", 0)}% | زن: {gender_percentages.get("زن", 0)}%</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            with col5: 
+                st.markdown(f'''
+                <div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); {black_style}">
+                    <h3 style="{black_style}">❓ نامشخص</h3>
+                    <div class="stat-number" style="{black_style}">{undecided_count}</div>
+                    <div class="stat-label" style="{black_style}">{undecided_percentage}% از {total_interviewed} نفر</div>
+                </div>
+                ''', unsafe_allow_html=True)
             
             # 4. آماده‌سازی جدول
             st.subheader("📊 لیست مصاحبه‌شوندگان")

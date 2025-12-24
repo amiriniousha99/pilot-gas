@@ -53,17 +53,41 @@ def load_login_css():
             color: white;
             text-align: center;
             font-size: 2rem;
-            margin-right: 2rem;
+            margin-left: 1rem;
             margin-bottom: 1.5rem;
             font-weight: 700;
         }
-        
+        /* استایل لیبل‌ها (نام کاربری و رمز عبور) */
         .stTextInput label {
             color: white !important;
             margin-bottom: 8px;
             font-size: 1rem;
+            text-align: right;
+            width: 100%;
+            direction: rtl;
         }
+        /* 👇👇👇 تغییرات اصلی برای راست‌چین کردن متن و چپ‌چین کردن آیکون 👇👇👇 */
         
+        /* 1. راست‌چین کردن متن داخل اینپوت */
+       /* 1. راست‌چین کردن متن داخل کادر */
+        .stTextInput input {
+            text-align: right !important;
+            direction: rtl !important;
+            padding-right: 10px !important;
+        }
+
+        /* 2. راست‌چین کردن آیکون چشم (حالت عادی) */
+        div[data-baseweb="input"] {
+            flex-direction: row !important; 
+        }
+
+        /* 3. تنظیم فاصله آیکون چشم در سمت راست */
+        div[data-baseweb="input"] > button {
+            margin-left: auto !important;   /* فاصله از سمت چپ */
+            margin-right: 0 !important;     /* چسبیدن به راست */
+            padding-right: 0 !important;
+            padding-left: 10px !important;  /* فاصله بین متن و چشم */
+        }
         .stTextInput input {
             color: #333;
             background-color: white;
@@ -375,7 +399,7 @@ def load_dashboard_css():
         
         /* عنوان کارت */
         .stat-card h3 {
-            color: white !important;
+            color: #000000 !important;
             font-size: 1.1rem !important; /* افزایش سایز فونت عنوان */
             margin-bottom: 8px !important;
             font-weight: 700 !important;
@@ -391,10 +415,12 @@ def load_dashboard_css():
         
         /* متن توضیحات پایین کارت */
         .stat-card .stat-label {
-            color: #212529 !important; /* سفید یخی */
-            font-size: 0.95rem !important; /* افزایش سایز فونت توضیحات */
-            opacity: 1;
-            font-weight: 500;
+            color: #000000 !important;      /* رنگ مشکی مطلق */
+            font-size: 1rem !important;     /* کمی درشت‌تر برای دیده شدن بهتر */
+            opacity: 1 !important;
+            font-weight: 300 !important;    /* 👈 ضخامت حداکثری فونت */
+            text-shadow: 0px 0px 1px #000000; /* 👈 ترفند سایه برای پررنگ‌تر دیده شدن */
+            margin-top: 5px !important;
         }
         
         /* استایل فیلترهای پرسنل - باکس‌های نام خانوادگی و شماره پرسنلی */
