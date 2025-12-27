@@ -419,18 +419,128 @@ def show_home_content():
     </body>
     </html>
     """, height=550)
-    st.markdown('<h1>🏠 خوش آمدید به سامانه مدیریت پیلوت گاز</h1>', unsafe_allow_html=True)
+ # ---------------------------------------------------------
+    # بخش کارت‌های صفحه اصلی (Home) - اصلاح شده
+    # ---------------------------------------------------------
+    
     st.subheader("📊 خلاصه وضعیت سیستم")
     
+    # ✅ 1. ایجاد فاصله بین تیتر و کارت‌ها
+    st.markdown("<div style='margin-bottom: 30px;'></div>", unsafe_allow_html=True)
+    
+    # ✅ 2. استایل CSS مخصوص کارت‌های واتر‌مارک‌دار (مشابه جذب)
+    st.markdown("""
+        <style>
+            .home-stat-card {
+                border-radius: 16px;
+                padding: 15px;
+                height: 160px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                position: relative;
+                overflow: hidden; /* برای اینکه استیکر بیرون نزند */
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                transition: transform 0.3s ease;
+                border: 1px solid rgba(255,255,255,0.3);
+            }
+            .home-stat-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            }
+            
+            /* استایل استیکر پس‌زمینه (واترمارک) */
+            .card-watermark {
+                position: absolute;
+                top: -15px;
+                left: -15px;
+                font-size: 80px;
+                opacity: 0.15; /* شفافیت کم */
+                pointer-events: none;
+                transform: rotate(15deg);
+                z-index: 0;
+            }
+            
+            /* محتوای روی کارت */
+            .card-content-home {
+                position: relative;
+                z-index: 1;
+                text-align: center;
+                width: 100%;
+            }
+            
+            .home-card-title {
+                font-size: 18px !important;
+                font-weight: 900 !important;
+                margin-bottom: 10px !important;
+                color: #000 !important;
+            }
+            .home-card-value {
+                font-size: 32px !important;
+                font-weight: 900 !important;
+                margin: 5px 0 !important;
+                color: #000 !important;
+                text-shadow: none !important;
+            }
+            .home-card-sub {
+                font-size: 14px !important;
+                font-weight: bold !important;
+                opacity: 0.8;
+                color: #333 !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     col1, col2, col3, col4 = st.columns(4)
+    
+    # کارت ۱: منابع انسانی
     with col1:
-        st.markdown('<div class="dashboard-card"><h3 style="color: #033270;">👥 منابع انسانی</h3><p style="font-size: 2rem; font-weight: bold; color: #2ecc71;">150</p><p style="color: #666;">تعداد کارکنان</p></div>', unsafe_allow_html=True)
+        st.markdown(f'''
+        <div class="home-stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="card-watermark">👥</div> <div class="card-content-home">
+                <div class="home-card-title">منابع انسانی</div>
+                <div class="home-card-value">150</div>
+                <div class="home-card-sub">تعداد کارکنان</div>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    # کارت ۲: تولید
     with col2:
-        st.markdown('<div class="dashboard-card"><h3 style="color: #033270;">🏭 تولید</h3><p style="font-size: 2rem; font-weight: bold; color: #3498db;">1,234</p><p style="color: #666;">واحد تولید شده</p></div>', unsafe_allow_html=True)
+        st.markdown(f'''
+        <div class="home-stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <div class="card-watermark">🏭</div> <div class="card-content-home">
+                <div class="home-card-title">تولید</div>
+                <div class="home-card-value">1,234</div>
+                <div class="home-card-sub">واحد تولید شده</div>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    # کارت ۳: فروش
     with col3:
-        st.markdown('<div class="dashboard-card"><h3 style="color: #033270;">💰 فروش</h3><p style="font-size: 2rem; font-weight: bold; color: #e74c3c;">₽2.5M</p><p style="color: #666;">فروش ماهانه</p></div>', unsafe_allow_html=True)
+        st.markdown(f'''
+        <div class="home-stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+            <div class="card-watermark">💰</div> <div class="card-content-home">
+                <div class="home-card-title">فروش</div>
+                <div class="home-card-value">2.5M</div>
+                <div class="home-card-sub">فروش ماهانه</div>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    # کارت ۴: انبار
     with col4:
-        st.markdown('<div class="dashboard-card"><h3 style="color: #033270;">📦 انبار</h3><p style="font-size: 2rem; font-weight: bold; color: #f39c12;">567</p><p style="color: #666;">اقلام موجود</p></div>', unsafe_allow_html=True)
+        st.markdown(f'''
+        <div class="home-stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+            <div class="card-watermark">📦</div> <div class="card-content-home">
+                <div class="home-card-title">انبار</div>
+                <div class="home-card-value">567</div>
+                <div class="home-card-sub">اقلام موجود</div>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
 # =========================================================
 # 🛠️ توابع کمکی لود دیتا (حتما قبل از show_hr_content باشد)
 # =========================================================
@@ -1395,7 +1505,7 @@ def show_hr_content():
                                     <div class="analysis-content">
                                         <ul style="list-style-type:none; padding:0; margin:0 0 10px 0;">
                                             <li><b>میانگین تبدیل:</b> <span style="color:#000000; font-weight:bold;">{avg_conversion:.1f}%</span></li>
-                                            <li><b>شاخص تلاش (IPH):</b> <span style="color:#000000; font-weight:bold;">{iph:.1f}</span></li>
+                                            <li><b>شاخص تلاش:</b> <span style="color:#000000; font-weight:bold;">{iph:.1f}</span></li>
                                         </ul>
                                         <p>وضعیت غربالگری در حالت <b>«{eff_status}»</b> است. یعنی برای ۱ استخدام، {int(iph)} مصاحبه انجام شده است.</p>
                                         <div style="background:#e8f5e9; padding:8px; border-radius:8px; margin-top:8px; color:black;">
@@ -1517,11 +1627,15 @@ def show_hr_content():
                                     
                                     import textwrap
                                     if "نمای کلان" in selected_view:
-                                        plot_df = churn_df.copy(); y_col = 'وضعیت نهایی'; color_col = 'وضعیت نهایی'; color_scale = None; color_map = {'رد شد': '#c0392b', 'انصراف داد': '#e67e22'} 
+                                        # رنگ‌ها از گرادینت‌های کارت‌ها گرفته شده‌اند (صورتی/قرمز برای رد، نارنجی/زرد برای انصراف)
+                                        plot_df = churn_df.copy(); y_col = 'وضعیت نهایی'; color_col = 'وضعیت نهایی'; color_scale = None; 
+                                        color_map = {'رد شد': '#f5576c', 'انصراف داد': '#fb8c00'} 
                                     elif "دسته‌بندی" in selected_view:
-                                        plot_df = churn_df.copy(); y_col = 'علت_دسته_بندی_شده'; color_col = 'تعداد'; color_scale = 'Reds'; color_map = None
+                                        # تغییر رنگ قرمز به بنفش (هماهنگ با کارت‌های بنفش)
+                                        plot_df = churn_df.copy(); y_col = 'علت_دسته_بندی_شده'; color_col = 'تعداد'; color_scale = 'Blues'; color_map = None
                                     else:
-                                        plot_df = churn_df.copy(); y_col = 'علت نپذیرفتن'; color_col = 'تعداد'; color_scale = 'Oranges'; color_map = None
+                                        # تغییر رنگ نارنجی به آبی (هماهنگ با تم اصلی)
+                                        plot_df = churn_df.copy(); y_col = 'علت نپذیرفتن'; color_col = 'تعداد'; color_scale = 'Blues'; color_map = None 
 
                                     if y_col not in plot_df.columns: plot_df[y_col] = "نامشخص"
                                     
@@ -1604,7 +1718,15 @@ def show_hr_content():
                                     pareto_df['درصد'] = ((pareto_df['تعداد'] / tot_c) * 100).round(1)
                                     max_val = pareto_df['تعداد'].max() if not pareto_df.empty else 10
 
-                                    fig_par = px.bar(pareto_df, x='علت', y='تعداد', text='تعداد', color='تعداد', color_continuous_scale='Reds')
+                                    # تعریف طیف رنگی سفارشی: از آبی آسمانی (#90caf9) تا سرمه‌ای سازمانی (#033270)
+                                    fig_par = px.bar(
+                                        pareto_df, 
+                                        x='علت', 
+                                        y='تعداد', 
+                                        text='تعداد', 
+                                        color='تعداد', 
+                                        color_continuous_scale=[(0, "#90caf9"), (1, "#033270")]
+                                    )
                                     fig_par.update_traces(
                                         textposition='outside', marker_cornerradius=6, cliponaxis=False,
                                         textfont=dict(color='black', size=14, weight='bold'),
