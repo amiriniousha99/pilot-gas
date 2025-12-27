@@ -70,11 +70,12 @@ if target_user and target_user in USERS:
     st.session_state.logged_in = True
     st.session_state.user_info = USERS[target_user]
 
+# این بخش را جایگزین کد قبلی خروج کنید (حدود خط ۶۰)
 if st.query_params.get("action") == "logout":
-    st.session_state.logged_in = False
-    st.session_state.user_info = None
-    st.query_params.clear()
-    st.rerun()
+    st.session_state.clear()       # 1. پاک کردن کل حافظه موقت (کش)
+    st.session_state.logged_in = False  # 2. تنظیم وضعیت به خارج شده
+    st.query_params.clear()        # 3. پاک کردن آدرس بار
+    st.rerun()                     # 4. رفرش صفحه
 #ادرس گوگل شیت
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw9VrEUyzTpbxeQf7vB8IzZ7BmmsYP65yy-dWGvTCBRLorDc8dCm0f5O3NPQxV9hXn0/exec"
 

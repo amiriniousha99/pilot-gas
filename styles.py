@@ -541,8 +541,8 @@ def show_custom_navbar(current_page="home"):
         disabled_class = '' if menu['access'] else 'disabled'
         menu_html_left += f'<a class="nav-item {active_class} {disabled_class}" href="?user={current_user}&page={menu["key"]}">{menu["label"]}</a>'
     
-    menu_html_right = f'<a class="logout-item" href="?user={current_user}&action=logout"><i class="fas fa-sign-out-alt"></i> خروج</a>'
-    
+# 👇👇👇 خط اصلاح شده (اضافه شدن target="_self") 👇👇👇
+    menu_html_right = f'<a class="logout-item" href="?user={current_user}&action=logout" target="_self"><i class="fas fa-sign-out-alt"></i> خروج</a>'    
     st.markdown(f"""
     <div class="custom-navbar">
         <div class="nav-right">
