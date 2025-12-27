@@ -3,3 +3,5 @@ pandas
 requests
 jdatetime
 streamlit-option-menu
+plotly
+openpyxl

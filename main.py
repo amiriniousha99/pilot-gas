@@ -259,6 +259,53 @@ def login_page():
 
 def show_home_content():
     # ==========================================
+    # 💎 استایل سراسری فونت بی نازنین (برای کل سامانه)
+    # ==========================================
+    st.markdown("""
+        <style>
+            /* 1. تعریف فونت (اگر روی سیستم نصب باشد یا از CDN) */
+            @font-face {
+                font-family: 'B Nazanin';
+                src: local('B Nazanin'), local('B_Nazanin');
+            }
+
+            /* 2. اعمال فونت روی تمام اجزای HTML بصورت اجباری */
+            html, body, [class*="css"] {
+                font-family: 'B Nazanin', 'Tahoma', sans-serif !important;
+            }
+
+            /* 3. اصلاح دقیق‌تر برای اجزای خاص استریم‌لیت */
+            .stTextInput, .stNumberInput, .stSelectbox, .stDateInput, 
+            .stTimeInput, .stTextArea, .stButton, .stCheckbox, .stRadio,
+            .stExpander, .stTabs, .stDataFrame, .stTable, .stMetric {
+                font-family: 'B Nazanin', 'Tahoma', sans-serif !important;
+            }
+
+            /* 4. متن‌های داخل دکمه‌ها، لیبل‌ها و ورودی‌ها */
+            button, input, textarea, select, label, p, span, div {
+                font-family: 'B Nazanin', 'Tahoma', sans-serif !important;
+            }
+
+            /* 5. تیترها */
+            h1, h2, h3, h4, h5, h6 {
+                font-family: 'B Nazanin', 'Tahoma', sans-serif !important;
+                font-weight: 900 !important; /* ضخیم کردن تیترها */
+            }
+
+            /* 6. اعداد داخل جداول و دیتافریم‌ها */
+            .stDataFrame div, .stDataFrame span {
+                font-family: 'B Nazanin', 'Tahoma', sans-serif !important;
+                font-size: 15px !important;
+            }
+            
+            /* 7. اصلاح فونت تولتیپ‌های نمودارهای Plotly */
+            .js-plotly-plot .plotly, .js-plotly-plot .plotly text, 
+            .js-plotly-plot .plotly .hovertext text {
+                font-family: 'B Nazanin', 'Tahoma', sans-serif !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    # ==========================================
     # 🎨 تنظیمات: اسلایدر با ارتفاع کمتر (350 پیکسل)
     # ==========================================
     st.markdown("""
@@ -703,9 +750,7 @@ def show_hr_content():
     # یک فاصله خالی پایین باکس برای جلوگیری از تداخل
     st.markdown("<div style='margin-bottom: 50px;'></div>", unsafe_allow_html=True)
 
-    # ---------------------------------------------------------
-    # 👆👆👆 پایان کد 👆👆👆
-    # ---------------------------------------------------------
+
 
     # 3. مدیریت وضعیت تب فعال
     if 'hr_active_tab' not in st.session_state:
@@ -754,107 +799,210 @@ def show_hr_content():
 
     # بخش ۵: داشبورد تحلیل (شامل تمام نمودارها و تحلیل‌ها)
     # ---------------------------------------------------------
+    # ---------------------------------------------------------
+    # بخش ۵: داشبورد تحلیل (شامل تمام نمودارها و تحلیل‌ها)
+    # ---------------------------------------------------------
     if st.session_state.hr_active_tab == "داشبورد تحلیلی":
+        # ✅✅✅ این خط جدید را حتماً اضافه کنید:
+        ensure_data_loaded("monthly") 
+        
+        # خطوط قبلی که بودند:
         ensure_data_loaded("employee")
         ensure_data_loaded("personnel")
         
-        # تب‌های فرعی برای پرسنل و جذب (این‌ها باید باشند چون در کد اصلی بودند)
+        # تب‌های فرعی...
         sub_tab1, sub_tab2 = st.tabs(["👥 تحلیل پرسنل", "📝 تحلیل جذب و استخدام"])
         
         with sub_tab1:
-            st.markdown("#### نمودارهای تحلیلی پرسنل")
-            if st.session_state.personnel_data is not None:
-                df_pers = st.session_state.personnel_data.copy()
-                col1, col2 = st.columns(2)
-                with col1:
-                    if 'واحد' in df_pers.columns:
-                        unit_counts = df_pers['واحد'].value_counts().reset_index()
-                        unit_counts.columns = ['واحد', 'تعداد']
-                        fig1 = px.pie(unit_counts, values='تعداد', names='واحد', title='توزیع پرسنل بر اساس واحد')
-                        fig1.update_traces(textposition='inside', textinfo='percent+label')
-                        st.plotly_chart(fig1, use_container_width=True)
-                with col2:
-                    if 'زیرگروه' in df_pers.columns:
-                        subgroup_counts = df_pers['زیرگروه'].value_counts().reset_index()
-                        subgroup_counts.columns = ['زیرگروه', 'تعداد']
-                        fig2 = px.bar(subgroup_counts, x='تعداد', y='زیرگروه', orientation='h', title='توزیع پرسنل بر اساس زیرگروه')
-                        st.plotly_chart(fig2, use_container_width=True)
-            else: st.warning("داده‌های پرسنل بارگذاری نشده‌اند.")
-        
-        with sub_tab1:
-            st.markdown("#### نمودارهای تحلیلی پرسنل")
+            st.markdown("#### 📊 داشبورد جامع تحلیل سرمایه انسانی")
             
-            if st.session_state.personnel_data is not None:
-                df_pers = st.session_state.personnel_data.copy()
+            # اطمینان از لود بودن داده‌ها
+            if st.session_state.monthlylist_data is not None and st.session_state.personnel_data is not None:
                 
-                col1, col2 = st.columns(2)
+                # 1. آماده‌سازی داده‌ها
+                df_main = st.session_state.monthlylist_data.copy()
+                df_gender_source = st.session_state.personnel_data.copy()
                 
-                with col1:
-                    if 'واحد' in df_pers.columns:
-                        unit_counts = df_pers['واحد'].value_counts().reset_index()
-                        unit_counts.columns = ['واحد', 'تعداد']
-                        fig1 = px.pie(unit_counts, values='تعداد', names='واحد', 
-                                     title='توزیع پرسنل بر اساس واحد',
-                                     color_discrete_sequence=px.colors.qualitative.Set3)
-                        fig1.update_traces(textposition='inside', textinfo='percent+label')
-                        fig1.update_layout(
-                            font=dict(family="B Nazanin, Arial", size=12),
-                            title_font=dict(size=16, family="B Nazanin, Arial"),
-                            height=400
-                        )
-                        st.plotly_chart(fig1, use_container_width=True)
-                
-                with col2:
-                    if 'زیرگروه' in df_pers.columns:
-                        subgroup_counts = df_pers['زیرگروه'].value_counts().reset_index()
-                        subgroup_counts.columns = ['زیرگروه', 'تعداد']
-                        fig2 = px.bar(subgroup_counts, x='تعداد', y='زیرگروه', 
-                                     title='توزیع پرسنل بر اساس زیرگروه',
-                                     color='تعداد',
-                                     color_continuous_scale='Blues',
-                                     orientation='h')
-                        fig2.update_layout(
-                            font=dict(family="B Nazanin, Arial", size=12),
-                            title_font=dict(size=16, family="B Nazanin, Arial"),
-                            height=400,
-                            yaxis={'categoryorder':'total ascending'}
-                        )
-                        st.plotly_chart(fig2, use_container_width=True)
-                
-                col3, col4 = st.columns(2)
-                
-                with col3:
-                    if 'جنسیت' in df_pers.columns:
-                        gender_counts = df_pers['جنسیت'].value_counts().reset_index()
-                        gender_counts.columns = ['جنسیت', 'تعداد']
-                        fig3 = px.pie(gender_counts, values='تعداد', names='جنسیت',
-                                     title='توزیع جنسیتی پرسنل',
-                                     color_discrete_sequence=['#3498db', '#e74c3c'])
-                        fig3.update_traces(textposition='inside', textinfo='percent+label')
-                        fig3.update_layout(
-                            font=dict(family="B Nazanin, Arial", size=12),
-                            title_font=dict(size=16, family="B Nazanin, Arial"),
-                            height=400
-                        )
-                        st.plotly_chart(fig3, use_container_width=True)
-                
-                with col4:
-                    if 'واحد' in df_pers.columns and 'زیرگروه' in df_pers.columns:
-                        unit_subgroup = df_pers.groupby(['واحد', 'زیرگروه']).size().reset_index(name='تعداد')
-                        fig4 = px.sunburst(unit_subgroup, path=['واحد', 'زیرگروه'], values='تعداد',
-                                          title='توزیع سلسله‌مراتبی پرسنل',
-                                          color='تعداد',
-                                          color_continuous_scale='RdYlGn')
-                        fig4.update_layout(
-                            font=dict(family="B Nazanin, Arial", size=12),
-                            title_font=dict(size=16, family="B Nazanin, Arial"),
-                            height=400
-                        )
-                        st.plotly_chart(fig4, use_container_width=True)
-            else:
-                st.warning("داده‌های پرسنل بارگذاری نشده‌اند.")
+                # تمیزکاری اولیه نام ستون‌ها
+                df_main.columns = [str(col).strip().replace('ي', 'ی').replace('ك', 'ک') for col in df_main.columns]
+                df_gender_source.columns = [str(col).strip().replace('ي', 'ی').replace('ك', 'ک') for col in df_gender_source.columns]
 
-            with sub_tab2:
+                # ✅✅✅ بخش جدید: استانداردسازی نام ماه‌ها (حل مشکل ابان/آبان)
+                if 'ماه' in df_main.columns:
+                    def normalize_month(m):
+                        if pd.isna(m): return m
+                        m = str(m).strip().replace('ي', 'ی').replace('ك', 'ک')
+                        if m == "ابان": return "آبان"
+                        if m == "اذر": return "آذر"
+                        return m
+                    df_main['ماه'] = df_main['ماه'].apply(normalize_month)
+
+                # ادغام برای افزودن جنسیت به گزارش ماهانه
+                if 'شماره پرسنلی' in df_main.columns and 'شماره پرسنلی' in df_gender_source.columns and 'جنسیت' in df_gender_source.columns:
+                    df_main['شماره پرسنلی'] = df_main['شماره پرسنلی'].astype(str).str.strip()
+                    df_gender_source['شماره پرسنلی'] = df_gender_source['شماره پرسنلی'].astype(str).str.strip()
+                    
+                    # حذف تکراری‌ها در فایل پرسنلی
+                    gender_map = df_gender_source.drop_duplicates('شماره پرسنلی')[['شماره پرسنلی', 'جنسیت']]
+                    
+                    # ادغام
+                    df_merged = pd.merge(df_main, gender_map, on='شماره پرسنلی', how='left')
+                    df_merged['جنسیت'] = df_merged['جنسیت'].fillna('نامشخص')
+                else:
+                    df_merged = df_main.copy()
+                    df_merged['جنسیت'] = 'نامشخص'
+
+                # 2. چیدمان فیلترها
+                persian_months_order = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"]
+                
+                # پیدا کردن ماه‌های موجود
+                available_months = df_merged['ماه'].unique().tolist() if 'ماه' in df_merged.columns else []
+                # مرتب‌سازی ماه‌ها
+                sorted_months = sorted([m for m in available_months if m in persian_months_order], key=lambda x: persian_months_order.index(x))
+                
+                # کانتینر فیلترها
+                st.markdown('<div style="background-color: white; padding: 15px; border-radius: 10px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px;">', unsafe_allow_html=True)
+                f_col1, f_col2, f_col3 = st.columns([1.5, 1, 1])
+                
+                with f_col1:
+                    selected_gender = st.radio(
+                        "تفکیک جنسیتی:",
+                        ["👥 همه", "👨 آقایان", "👩 خانم‌ها"],
+                        horizontal=True,
+                        key="dash_gender_filter_new"
+                    )
+                
+                with f_col2:
+                    # انتخاب پیش‌فرض: آخرین ماه لیست (که الان باید آبان یا آذر باشد)
+                    default_idx = len(sorted_months) - 1 if sorted_months else 0
+                    selected_month = st.selectbox("📅 انتخاب ماه:", sorted_months, index=default_idx, key="dash_month_filter_new")
+                
+                with f_col3:
+                    units_list = ['همه'] + sorted(df_merged['واحد'].dropna().unique().tolist()) if 'واحد' in df_merged.columns else ['همه']
+                    selected_unit = st.selectbox("🏭 انتخاب واحد:", units_list, key="dash_unit_filter_new")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # 3. فیلتر کردن داده‌ها
+                df_month_filtered = df_merged[df_merged['ماه'] == selected_month].copy()
+                
+                if selected_unit != "همه":
+                    df_month_filtered = df_month_filtered[df_month_filtered['واحد'] == selected_unit]
+                
+                if selected_gender == "👨 آقایان":
+                    df_month_filtered = df_month_filtered[df_month_filtered['جنسیت'] == "مرد"]
+                elif selected_gender == "👩 خانم‌ها":
+                    df_month_filtered = df_month_filtered[df_month_filtered['جنسیت'] == "زن"]
+
+                # 4. محاسبات کارت‌ها
+                
+                # A: تعداد کل پرسنل فعال (کسانی که وضعیتشان ترک کار نیست)
+                if 'وضعیت' in df_month_filtered.columns:
+                    active_df = df_month_filtered[~df_month_filtered['وضعیت'].astype(str).str.contains('ترک کار|قطع همکاری', case=False, na=False)]
+                    total_active_count = len(active_df)
+                else:
+                    total_active_count = len(df_month_filtered)
+
+                # تابع کمکی تاریخ
+                month_map = {name: str(i+1).zfill(2) for i, name in enumerate(persian_months_order)}
+                target_month_num = month_map.get(selected_month, "00")
+
+                def check_date_in_month(date_val, m_num):
+                    try:
+                        s = str(date_val).strip()
+                        if pd.isna(s) or s == 'nan' or s == 'None': return False
+                        parts = s.split('/')
+                        if len(parts) >= 2:
+                            return parts[1] == m_num
+                        return False
+                    except: return False
+
+                # B: جذب جدید
+                new_hires_count = 0
+                if 'تاریخ استخدام' in df_month_filtered.columns:
+                    new_hires_df = df_month_filtered[df_month_filtered['تاریخ استخدام'].apply(lambda x: check_date_in_month(x, target_month_num))]
+                    new_hires_count = len(new_hires_df)
+
+                # C: نرخ ریزش
+                churn_count = 0
+                if 'تاریخ ترک کار' in df_month_filtered.columns:
+                    churn_df = df_month_filtered[df_month_filtered['تاریخ ترک کار'].apply(lambda x: check_date_in_month(x, target_month_num))]
+                    churn_count = len(churn_df)
+                elif 'علت ترک کار' in df_month_filtered.columns:
+                     churn_count = len(df_month_filtered[df_month_filtered['علت ترک کار'].notna() & (df_month_filtered['علت ترک کار'] != "نامشخص")])
+
+                churn_rate = round((churn_count / len(df_month_filtered) * 100), 1) if len(df_month_filtered) > 0 else 0
+
+                # 5. نمایش کارت‌ها
+                st.markdown("""
+                <style>
+                    .gradient-card {
+                        border-radius: 16px;
+                        padding: 15px !important;
+                        height: 160px !important;
+                        display: flex; flex-direction: column; justify-content: space-between;
+                        position: relative; overflow: hidden;
+                        border: 1px solid rgba(255,255,255,0.5);
+                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
+                        transition: transform 0.3s;
+                    }
+                    .gradient-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+                    .watermark-icon {
+                        position: absolute; top: -15px; left: -15px;
+                        font-size: 80px; opacity: 0.1; pointer-events: none; transform: rotate(15deg);
+                    }
+                    .card-content { position: relative; z-index: 2; }
+                    .g-title { font-size: 16px !important; font-weight: 800; color: rgba(0,0,0,0.6); margin: 0; }
+                    .g-value { font-size: 42px !important; font-weight: 900; color: #333; margin: 5px 0; text-shadow: 1px 1px 0px rgba(255,255,255,0.5); }
+                    .g-sub { font-size: 14px !important; color: rgba(0,0,0,0.7); font-weight: 700; }
+                </style>
+                """, unsafe_allow_html=True)
+
+                c1, c2, c3 = st.columns(3)
+                
+                with c1:
+                    st.markdown(f"""
+                    <div class="gradient-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #90caf9 100%);">
+                        <div class="watermark-icon">👥</div>
+                        <div class="card-content">
+                            <div class="g-title">پرسنل فعال</div>
+                            <div class="g-value">{total_active_count}</div>
+                            <div class="g-sub">تعداد نفرات در {selected_month}</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                with c2:
+                    bg_color = "linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)" if churn_rate > 5 else "linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)"
+                    st.markdown(f"""
+                    <div class="gradient-card" style="background: {bg_color};">
+                        <div class="watermark-icon">📉</div>
+                        <div class="card-content">
+                            <div class="g-title">نرخ ریزش ماهانه</div>
+                            <div class="g-value">{churn_rate}%</div>
+                            <div class="g-sub">{churn_count} نفر خروج در {selected_month}</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                with c3:
+                    st.markdown(f"""
+                    <div class="gradient-card" style="background: linear-gradient(135deg, #e8f5e9 0%, #a5d6a7 100%);">
+                        <div class="watermark-icon">🚀</div>
+                        <div class="card-content">
+                            <div class="g-title">جذب جدید</div>
+                            <div class="g-value">{new_hires_count}</div>
+                            <div class="g-sub">استخدام شده در {selected_month}</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.markdown("<hr style='margin: 30px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+                
+            else:
+                st.warning("⚠️ داده‌های گزارش ماهانه یا پرسنلی بارگذاری نشده‌اند.")
+        with sub_tab2:
+
                         st.markdown("### 📊 سامانه هوشمند تحلیل جذب")
                         
                         if st.session_state.employee_data is not None:
@@ -1032,7 +1180,7 @@ def show_hr_content():
                             with r1_c2:
                                 st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);"><div class="watermark-icon">❓</div><div class="card-content"><div class="g-title">وضعیت نامشخص</div><div class="g-value">{total_unknown}</div><div class="g-sub">در انتظار بررسی</div>{gender_html_unknown}</div></div>""", unsafe_allow_html=True)
                             with r1_c3:
-                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);"><div class="watermark-icon">🔥</div><div class="card-content"><div class="g-title">رکورددار مصاحبه‌ها</div><div class="g-value">{top_interview_count}</div><div class="g-sub">{top_interview_unit}</div>{gender_html_interview}</div></div>""", unsafe_allow_html=True)
+                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);"><div class="watermark-icon">📥</div><div class="card-content"><div class="g-title">واحد با بیشترین حجم مصاحبه</div><div class="g-value">{top_interview_count}</div><div class="g-sub">{top_interview_unit}</div>{gender_html_interview}</div></div>""", unsafe_allow_html=True)
                             with r1_c4:
                                 st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);"><div class="watermark-icon">🛡️</div><div class="card-content"><div class="g-title">غربالگری اولیه</div><div class="g-value">{total_rejected}</div><div class="g-sub">در مرحله غربالگری</div>{gender_html_rejected}</div></div>""", unsafe_allow_html=True)
                             
@@ -1044,7 +1192,7 @@ def show_hr_content():
                             with r2_c2:
                                 st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);"><div class="watermark-icon">🤝</div><div class="card-content"><div class="g-title">جذب موفق</div><div class="g-value">{total_hired}</div><div class="g-sub">جذب موفق</div>{gender_html_hired}</div></div>""", unsafe_allow_html=True)
                             with r2_c3:
-                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);"><div class="watermark-icon">🏆</div><div class="card-content"><div class="g-title">واحد برتر جذب</div><div class="g-value">{top_hired_count}</div><div class="g-sub">{top_hired_unit}</div>{gender_html_top_unit}</div></div>""", unsafe_allow_html=True)
+                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);"><div class="watermark-icon">🏆</div><div class="card-content"><div class="g-title">بیشترین تعداد استخدام موفق</div><div class="g-value">{top_hired_count}</div><div class="g-sub">{top_hired_unit}</div>{gender_html_top_unit}</div></div>""", unsafe_allow_html=True)
                             with r2_c4:
                                 st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #eceff1 0%, #cfd8dc 100%);"><div class="watermark-icon">⚖️</div><div class="card-content"><div class="g-title">شاخص بازدهی جذب</div><div class="g-value">{effort_text}</div><div style="margin-top:auto; font-size:15px; color:#455a64; background:rgba(255,255,255,0.6); padding:4px 8px; border-radius:6px; text-align:center;">بررسی به ازای ۱ استخدام</div></div></div>""", unsafe_allow_html=True)
 
@@ -1243,7 +1391,7 @@ def show_hr_content():
                                     gap = best_unit['Rate'] - avg_conversion
                                     eff_status = "مطلوب" if iph < 6 else ("نیازمند بهبود" if iph < 12 else "بحرانی")
                                     html_1 = f"""
-                                    <div class="analysis-title">🎯 تابلوی فرمان شاخص‌ها</div>
+                                    <div class="analysis-title">🎯 تحلیل نرخ تبدیل مصاحبه به استخدام</div>
                                     <div class="analysis-content">
                                         <ul style="list-style-type:none; padding:0; margin:0 0 10px 0;">
                                             <li><b>میانگین تبدیل:</b> <span style="color:#000000; font-weight:bold;">{avg_conversion:.1f}%</span></li>
@@ -1349,15 +1497,15 @@ def show_hr_content():
                                     churn_df['علت_دسته_بندی_شده'] = churn_df['علت نپذیرفتن'].apply(categorize_rejection_reason)
                                 else: churn_df['علت_دسته_بندی_شده'] = 'نامشخص'
 
-                                            # ---------------------------------------------------------
-                                # ردیف ۳: نقشه حرارتی (Heatmap) - اصلاح رنگ‌بندی به آبی (تم داشبورد)
+                                # ---------------------------------------------------------
+                                # ردیف ۳: نقشه حرارتی (Heatmap)
                                 # ---------------------------------------------------------
                                 c3_right, c3_left = st.columns([2.2, 1])
 
                                 with c3_right:
                                     f_col, t_col = st.columns([1, 2])
                                     with t_col: 
-                                        st.markdown("<h5 style='color:#033270; margin:0;'>نقشه حرارتی ریزش نیرو 🗺️</h5>", unsafe_allow_html=True)
+                                        st.markdown("<h5 style='color:#033270; margin:0;'>توزیع دلایل رد و انصراف در واحدها 🗺️</h5>", unsafe_allow_html=True)
                                     
                                     with f_col: 
                                         selected_view = st.selectbox(
@@ -1369,31 +1517,11 @@ def show_hr_content():
                                     
                                     import textwrap
                                     if "نمای کلان" in selected_view:
-                                        # سطح ۱: وضعیت نهایی
-                                        plot_df = churn_df.copy()
-                                        y_col = 'وضعیت نهایی'
-                                        color_col = 'وضعیت نهایی'
-                                        color_scale = None
-                                        # 👇 تغییر رنگ به تم آبی داشبورد
-                                        color_map = {'رد شد': '#033270', 'انصراف داد': '#4FC3F7'} 
-                                    
+                                        plot_df = churn_df.copy(); y_col = 'وضعیت نهایی'; color_col = 'وضعیت نهایی'; color_scale = None; color_map = {'رد شد': '#c0392b', 'انصراف داد': '#e67e22'} 
                                     elif "دسته‌بندی" in selected_view:
-                                        # سطح ۲: دسته‌بندی هوشمند
-                                        plot_df = churn_df.copy()
-                                        y_col = 'علت_دسته_بندی_شده'
-                                        color_col = 'تعداد'
-                                        # 👇 تغییر طیف رنگی به آبی
-                                        color_scale = 'Blues'
-                                        color_map = None
-                                    
+                                        plot_df = churn_df.copy(); y_col = 'علت_دسته_بندی_شده'; color_col = 'تعداد'; color_scale = 'Reds'; color_map = None
                                     else:
-                                        # سطح ۳: علت دقیق
-                                        plot_df = churn_df.copy()
-                                        y_col = 'علت نپذیرفتن'
-                                        color_col = 'تعداد'
-                                        # 👇 تغییر طیف رنگی به آبی
-                                        color_scale = 'Blues'
-                                        color_map = None
+                                        plot_df = churn_df.copy(); y_col = 'علت نپذیرفتن'; color_col = 'تعداد'; color_scale = 'Oranges'; color_map = None
 
                                     if y_col not in plot_df.columns: plot_df[y_col] = "نامشخص"
                                     
@@ -1443,7 +1571,7 @@ def show_hr_content():
                                         state_t = "وضعیت متعادل"; icon = "⚖️"; color = "#2e7d32"; msg = "توزیع نرمال است."
 
                                     html_3 = f"""
-                                    <div class="analysis-title">⚖️ ترازنامه رد و انصراف</div>
+                                    <div class="analysis-title">⚖️ مقایسه سهم رد صلاحیت و انصراف داوطلب</div>
                                     <div class="analysis-content">
                                         <div style="display:flex; justify-content:space-between; margin-bottom:10px; text-align:center;">
                                             <div style="background:#fff3e0; padding:8px; border-radius:8px; width:48%;">
@@ -1465,8 +1593,8 @@ def show_hr_content():
 
                                 st.markdown("<hr style='margin: 30px 0; opacity: 0.2;'>", unsafe_allow_html=True)
 
-            # ---------------------------------------------------------
-                                # ردیف ۴: پارتو (Pareto) - اصلاح رنگ برای وضوح بیشتر ستون‌های آخر
+                                # ---------------------------------------------------------
+                                # ردیف ۴: پارتو (Pareto)
                                 # ---------------------------------------------------------
                                 c4_right, c4_left = st.columns([2.2, 1])
 
@@ -1476,14 +1604,7 @@ def show_hr_content():
                                     pareto_df['درصد'] = ((pareto_df['تعداد'] / tot_c) * 100).round(1)
                                     max_val = pareto_df['تعداد'].max() if not pareto_df.empty else 10
 
-                                    # 👇 تغییر مهم: تعریف طیف رنگی دستی (از آبی خوش‌رنگ تا سرمه‌ای)
-                                    # این کار باعث می‌شود ستون‌های کوچک هم رنگ داشته باشند و سفید نشوند
-                                    fig_par = px.bar(
-                                        pareto_df, x='علت', y='تعداد', text='تعداد', 
-                                        color='تعداد', 
-                                        color_continuous_scale=[(0, "#64B5F6"), (1, "#033270")]
-                                    )
-                                    
+                                    fig_par = px.bar(pareto_df, x='علت', y='تعداد', text='تعداد', color='تعداد', color_continuous_scale='Reds')
                                     fig_par.update_traces(
                                         textposition='outside', marker_cornerradius=6, cliponaxis=False,
                                         textfont=dict(color='black', size=14, weight='bold'),
@@ -1491,9 +1612,9 @@ def show_hr_content():
                                         customdata=pareto_df['درصد'],
                                         hovertemplate='<span style="color:black; font-family:B Nazanin; font-size:14px;"><b>تعداد</b>: %{y} نفر</span><br><span style="color:black; font-family:B Nazanin; font-size:14px;"><b>علت</b>: %{x}</span><br><span style="color:black; font-family:B Nazanin; font-size:14px;"><b>سهم</b>: %{customdata}%</span><extra></extra>'
                                     )
-                                    
+                                    # افزایش رنج محور عمودی برای جلوگیری از بریدن اعداد بالا
                                     fig_par.update_layout(
-                                        title={'text': '🚧 گلوگاه‌های اصلی (پارتو)', 'y': 0.95, 'x': 1, 'xanchor': 'right', 'xref': 'paper'},
+                                        title={'text': '🛑 فراوانی دلایل شکست در استخدام', 'y': 0.95, 'x': 1, 'xanchor': 'right', 'xref': 'paper'},
                                         title_font=dict(size=22, family="B Nazanin", color="black", weight="bold"),
                                         font=dict(family="B Nazanin", color="black"),
                                         plot_bgcolor='white', paper_bgcolor='white',
@@ -1510,7 +1631,6 @@ def show_hr_content():
                                     if not pareto_df.empty:
                                         top_cause = pareto_df.iloc[0]
                                         cause_n = top_cause['علت']; cause_p = top_cause['درصد']
-                                        
                                         s_map = {
                                             'حقوق': "بازنگری پکیج جبران خدمات", 'مسیر': "راه‌اندازی سرویس", 
                                             'فنی': "سخت‌گیری در غربالگری اولیه", 'ساعت': "شفاف‌سازی شیفت کاری", 
@@ -1521,25 +1641,23 @@ def show_hr_content():
                                             if k in str(cause_n): sol=v; break
                                         
                                         html_4 = f"""
-                                        <div class="analysis-box">
-                                            <div class="analysis-title">🩺 عارضه‌یابی ریشه‌ای</div>
-                                            <div class="analysis-content">
-                                                <div style="background:#fff5f5; border:1px solid #ffcccc; color:#990000; padding:10px; border-radius:8px; margin-bottom:10px;">
-                                                    🚫 <b>عامل اصلی شکست:</b><br>
-                                                    علت <b>«{cause_n}»</b> به تنهایی مسئول <b>{cause_p}%</b> از کل موارد ریزش است.
-                                                </div>
-                                                <div style="margin-bottom:10px;">
-                                                    💊 <b>تجویز راهبردی:</b><br>
-                                                    <span style="color:#033270; font-weight:bold;">{sol}</span>
-                                                </div>
-                                                <p style="font-size:14px; color:#666; margin-top:10px; border-top:1px dashed #ccc; padding-top:8px;">
-                                                    طبق اصل پارتو، رفع همین یک گلوگاه نیمی از مشکلات را حل می‌کند.
-                                                </p>
+                                        <div class="analysis-title">🩺 عارضه‌یابی ریشه‌ای</div>
+                                        <div class="analysis-content">
+                                            <div style="background:#fff5f5; border:1px solid #ffcccc; color:#990000; padding:10px; border-radius:8px; margin-bottom:10px;">
+                                                🚫 <b>عامل اصلی شکست:</b><br>
+                                                علت <b>«{cause_n}»</b> به تنهایی مسئول <b>{cause_p}%</b> از کل موارد ریزش است.
                                             </div>
+                                            <div style="margin-bottom:10px;">
+                                                💊 <b>تجویز راهبردی:</b><br>
+                                                <span style="color:#033270; font-weight:bold;">{sol}</span>
+                                            </div>
+                                            <p style="font-size:14px; color:#666; margin-top:10px; border-top:1px dashed #ccc; padding-top:8px;">
+                                                طبق اصل پارتو، رفع همین یک گلوگاه نیمی از مشکلات را حل می‌کند.
+                                            </p>
                                         </div>
                                         """
-                                        st.markdown(html_4, unsafe_allow_html=True)
-                                    else: st.markdown('<div class="analysis-box">داده موجود نیست.</div>', unsafe_allow_html=True)
+                                        st.markdown(f'<div class="analysis-box">{html_4}</div>', unsafe_allow_html=True)
+                                    else: st.markdown(f'<div class="analysis-box">داده موجود نیست.</div>', unsafe_allow_html=True)
 
                             else: st.success("✨ داده‌ای برای تحلیل ریزش موجود نیست.")
                         else:
@@ -1794,13 +1912,13 @@ def show_hr_content():
         else:
             # اگر داده نبود، این پیام نمایش داده می‌شود
             st.warning("هنوز داده‌ای بارگذاری نشده است. لطفاً دکمه بارگذاری را بزنید.")
-   # ---------------------------------------------------------
-    # بخش 5: گزارش ماهانه (اصلاح شده برای مشکل آبان و حروف)
+ # ---------------------------------------------------------
+    # بخش 5: گزارش ماهانه (اصلاح نهایی: استایل آبی + ترتیب ستون‌ها)
     # ---------------------------------------------------------
     elif st.session_state.hr_active_tab == "گزارش ماهانه":
         ensure_data_loaded("monthly")
         
-            # تیتر
+        # تیتر
         st.markdown("""
             <div style="margin-top: -500px !important; padding-bottom: 10px !important;">
                 <h3 style="color: #033270; font-family: 'B Nazanin'; font-size: 2rem;">
@@ -1812,20 +1930,17 @@ def show_hr_content():
         if st.session_state.monthlylist_data is not None:
             df = st.session_state.monthlylist_data.copy()
             
-            # 1. تمیزکاری نام ستون‌ها (حذف فاصله و اصلاح حروف)
+            # 1. تمیزکاری نام ستون‌ها
             df.columns = [str(col).strip().replace('ي', 'ی').replace('ك', 'ک') for col in df.columns]
 
-            # 2. تمیزکاری مقادیر سلول‌ها (حل مشکل آبان/ابان و فاصله‌ها)
-            # این تابع تمام مشکلات تایپی رایج را حل می‌کند
+            # 2. تمیزکاری مقادیر سلول‌ها
             def clean_all_values(val):
                 if pd.isna(val): return val
                 val = str(val).strip().replace('ي', 'ی').replace('ك', 'ک')
-                # حل مشکل آبان و آذر
                 if val == "ابان": return "آبان"
                 if val == "اذر": return "آذر"
                 return val
 
-            # اعمال تمیزکاری روی کل جدول
             for col in df.columns:
                 df[col] = df[col].apply(clean_all_values)
 
@@ -1839,9 +1954,9 @@ def show_hr_content():
                 valid_months = [m for m in unique_months if m in persian_months_order]
                 sorted_months = sorted(valid_months, key=lambda x: persian_months_order.index(x))
                 if sorted_months:
-                    default_index = len(sorted_months) # انتخاب آخرین ماه
+                    default_index = len(sorted_months)
 
-            # 2. فیلترها (اصلاح شده: فاصله بیشتر از بالا + فونت بی نازنین)
+            # 3. فیلترها
             st.markdown("""
                 <div style="margin-bottom: 10px; margin-top: 40px;"> <span style="
                         font-family: 'B Nazanin', Tahoma, sans-serif !important;
@@ -1878,18 +1993,9 @@ def show_hr_content():
             if f_month != "همه" and 'ماه' in df_show.columns: df_show = df_show[df_show['ماه'] == f_month]
             if f_unit != "همه" and 'واحد' in df_show.columns: df_show = df_show[df_show['واحد'] == f_unit]
             if f_loc != "همه" and 'محل خدمت' in df_show.columns: df_show = df_show[df_show['محل خدمت'] == f_loc]
-            # 5. نمایش جدول (حتما داخل if باشد تا df_show شناخته شود)
-            st.dataframe(
-                style_dataframe(df_show),  # ✅ اعمال استایل آبی
-                use_container_width=True,
-                height=500,
-                hide_index=True
-            )
-
-            st.markdown(f"##### تعداد رکورد: {len(df_show)}")
-
+            
             # =========================================================
-            # ترتیب ستون‌ها
+            # ✅✅✅ اعمال ترتیب ستون‌ها قبل از نمایش
             # =========================================================
             target_columns = [
                 "روز کارکرد",
@@ -1904,141 +2010,25 @@ def show_hr_content():
                 "شماره پرسنلی"
             ]
             
+            # فقط ستون‌هایی که وجود دارند را انتخاب می‌کنیم
             final_cols = [col for col in target_columns if col in df_show.columns]
             
-            # چک کردن وجود ستون‌ها برای اطمینان
-            if "ماه" not in df_show.columns:
-                st.error("❌ ستون «ماه» در فایل اکسل پیدا نشد!")
-
             if final_cols:
                 df_show = df_show[final_cols]
 
-            st.dataframe(df_show, use_container_width=True, height=600, hide_index=True)
+
+            st.markdown(f"##### تعداد رکورد: {len(df_show)}")
+            # 5. نمایش جدول (با استایل آبی و ستون‌های مرتب شده)
+            st.dataframe(
+                style_dataframe(df_show), 
+                use_container_width=True,
+                height=500,
+                hide_index=True
+            )
+
+
         else:
             st.info("👈 دکمه دریافت اطلاعات را بزنید.")
-
-            # ==========================================
-            # 🔍 بخش فیلترها (۵ ستون در یک ردیف)
-            # ==========================================
-            # 2. فیلترها (اصلاح شده: فاصله بیشتر از بالا + فونت بی نازنین)
-            st.markdown("""
-                <div style="margin-bottom: 10px; margin-top: 40px;"> <span style="
-                        font-family: 'B Nazanin', Tahoma, sans-serif !important;
-                        font-size: 1.1rem;
-                        font-weight: bold;
-                        color: #033270;
-                        border-bottom: 2px solid #eee;
-                        padding-bottom: 5px;
-                        display: inline-block;
-                        width: 100%;
-                    ">
-                        🔍 فیلترها
-                    </span>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            col_filter1, col_filter2, col_filter3, col_filter4 = st.columns(4, gap="small")
-            # تغییر به 5 ستون برای جا شدن فیلتر محل خدمت
-            c1, c2, c3, c4, c5 = st.columns(5)
-            
-            # فیلتر ۱: نام خانوادگی
-            with c1:
-                f_family = st.text_input("نام خانوادگی", key="search_family_monthly")
-            
-            # فیلتر ۲: شماره پرسنلی
-            with c2:
-                f_code = st.text_input("شماره پرسنلی", key="search_code_monthly")
-            
-            # فیلتر ۳: ماه (مرتب شده بر اساس تقویم)
-            with c3:
-                if 'ماه' in df.columns:
-                    # پیدا کردن ماه‌های موجود در فایل
-                    available_months = df['ماه'].unique().tolist()
-                    # مرتب‌سازی ماه‌های موجود بر اساس لیست استاندارد شمسی
-                    sorted_months = sorted(
-                        available_months, 
-                        key=lambda x: persian_months_order.index(x) if x in persian_months_order else 99
-                    )
-                    # معکوس می‌کنیم تا ماه آخر (مثلا آبان) اول لیست باشد
-                    sorted_months.reverse()
-                    
-                    f_month = st.selectbox("انتخاب ماه", ['همه'] + sorted_months, key="filter_month_monthly")
-                else:
-                    f_month = "همه"
-                    st.warning("⚠️ ستون 'ماه' یافت نشد.")
-
-            # فیلتر ۴: واحد
-            with c4:
-                if 'واحد' in df.columns:
-                    if f_month != 'همه' and 'ماه' in df.columns:
-                        units = sorted(df[df['ماه'] == f_month]['واحد'].unique().tolist())
-                    else:
-                        units = sorted(df['واحد'].unique().tolist())
-                    f_unit = st.selectbox("واحد سازمانی", ['همه'] + units, key="filter_unit_monthly")
-                else:
-                    f_unit = "همه"
-
-            # فیلتر ۵: محل خدمت (اضافه شد ✅)
-            with c5:
-                if 'محل خدمت' in df.columns:
-                    # فیلتر هوشمند بر اساس انتخاب‌های قبلی
-                    temp_df = df.copy()
-                    if f_month != 'همه' and 'ماه' in temp_df.columns:
-                        temp_df = temp_df[temp_df['ماه'] == f_month]
-                    if f_unit != 'همه' and 'واحد' in temp_df.columns:
-                        temp_df = temp_df[temp_df['واحد'] == f_unit]
-                        
-                    locations = sorted(temp_df['محل خدمت'].unique().tolist())
-                    f_location = st.selectbox("محل خدمت", ['همه'] + locations, key="filter_location_monthly")
-                else:
-                    f_location = "همه"
-            
-            # --- اعمال فیلترها روی جدول ---
-            df_show = df.copy()
-            
-            if f_family and 'نام خانوادگی' in df_show.columns:
-                df_show = df_show[df_show['نام خانوادگی'].str.contains(f_family, case=False, na=False)]
-            
-            if f_code and 'شماره پرسنلی' in df_show.columns:
-                df_show = df_show[df_show['شماره پرسنلی'].astype(str).str.contains(f_code, na=False)]
-            
-            if f_month != "همه" and 'ماه' in df_show.columns:
-                df_show = df_show[df_show['ماه'] == f_month]
-            
-            if f_unit != "همه" and 'واحد' in df_show.columns:
-                df_show = df_show[df_show['واحد'] == f_unit]
-                
-            if f_location != "همه" and 'محل خدمت' in df_show.columns:
-                df_show = df_show[df_show['محل خدمت'] == f_location]
-            
-            # --- چیدمان ستون‌ها (دقیقاً طبق درخواست شما) ---
-            requested_order = [
-                'روزهای کارکرد',
-                 'محل خدمت',
-                'تاریخ استخدام',
-                'تاریخ ترک کار',
-                'وضعیت',
-                'واحد',
-                'ماه',
-                'نام خانوادگی',
-                'نام',
-                'شماره پرسنلی',
-            ]
-            
-            # ۱. انتخاب ستون‌های موجود از لیست درخواستی
-            final_columns = [c for c in requested_order if c in df_show.columns]
-            
-            # ۲. اضافه کردن ستون‌های باقیمانده (اگر ستونی در اکسل هست که در لیست بالا نیست)
-            remaining_cols = [c for c in df_show.columns if c not in final_columns]
-            
-            # ۳. ترکیب نهایی
-            df_final = df_show[final_columns + remaining_cols]
-
-            st.markdown(f"##### تعداد رکورد یافت شده: {len(df_final)}")
-            st.dataframe(df_final, use_container_width=True, height=600, hide_index=True)
-            
-    else:
-            st.info("👈 برای مشاهده اطلاعات، دکمه «دریافت اطلاعات جدید» را بزنید.")
     # ---------------------------------------------------------
 def show_production_content():
     st.markdown('<h1>🏭 مدیریت تولید</h1>', unsafe_allow_html=True)
