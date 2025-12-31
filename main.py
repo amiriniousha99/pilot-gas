@@ -1176,7 +1176,9 @@ def show_hr_content():
                                     tot = len(unit_specific)
                                     m_p = int((m_c/tot)*100) if tot>0 else 0
                                     f_p = int((f_c/tot)*100) if tot>0 else 0
-                                    gender_html_top_unit = f"""<div style="background:rgba(255,255,255,0.6); border-radius:8px; padding:6px; display:flex; justify-content:space-between; font-size:13px; color:#444;"><div>👨 {m_c} <span style="font-size:10px;">({m_p}%)</span></div><div>👩 {f_c} <span style="font-size:10px;">({f_p}%)</span></div></div>"""
+                                    # 👇 این خط قدیمی را پاک کنید 👇
+                                    # 👇👇👇 کد کاملاً اصلاح شده (دقیقاً مشابه کارت‌های دیگر) 👇👇👇
+                                    gender_html_top_unit = f"""<div style="background: rgba(255, 255, 255, 0.6); border-radius: 8px; padding: 6px 10px; display: flex; justify-content: space-between; align-items: center; margin-top: auto; font-size: 14px; color: #444; font-weight: 600; font-family: 'B Nazanin', Tahoma, sans-serif !important;"><div style="display:flex; align-items:center;">👨 {m_c} <span style="font-size:11px; opacity:0.7; margin-right:2px;">({m_p}%)</span></div><div style="width:1px; height:12px; background:#ccc; margin:0 5px;"></div><div style="display:flex; align-items:center;">👩 {f_c} <span style="font-size:11px; opacity:0.7; margin-right:2px;">({f_p}%)</span></div></div>"""
                                 else: gender_html_top_unit = ""
                             else:
                                 top_hired_unit = "---"; top_hired_count = 0; gender_html_top_unit = ""
@@ -1305,8 +1307,65 @@ def show_hr_content():
                             with r2_c3:
                                 st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);"><div class="watermark-icon">🏆</div><div class="card-content"><div class="g-title">بیشترین تعداد استخدام موفق</div><div class="g-value">{top_hired_count}</div><div class="g-sub">{top_hired_unit}</div>{gender_html_top_unit}</div></div>""", unsafe_allow_html=True)
                             with r2_c4:
-                                st.markdown(f"""<div class="gradient-card" style="background: linear-gradient(135deg, #eceff1 0%, #cfd8dc 100%);"><div class="watermark-icon">⚖️</div><div class="card-content"><div class="g-title">شاخص بازدهی جذب</div><div class="g-value">{effort_text}</div><div style="margin-top:auto; font-size:15px; color:#455a64; background:rgba(255,255,255,0.6); padding:4px 8px; border-radius:6px; text-align:center;">بررسی به ازای ۱ استخدام</div></div></div>""", unsafe_allow_html=True)
 
+                                # 1. تابع محلی تبدیل اعداد به فارسی
+                                def to_persian_num(num_str):
+                                    eng = "0123456789"
+                                    per = "۰۱۲۳۴۵۶۷۸۹"
+                                    tr = str.maketrans(eng, per)
+                                    return str(num_str).translate(tr)
+
+                                # 2. محاسبه مجدد متغیرها (برای جلوگیری از خطای NameError)
+                                # استفاده از متغیرهای محلی برای اطمینان از وجود داده
+                                candidates_local = len(df_emp)
+                                hired_df_local = df_emp[df_emp['وضعیت نهایی'] == 'استخدام شد']
+                                hired_count_local = len(hired_df_local)
+
+                                # 3. محاسبه عدد اصلی کارت (شاخص کل) به فارسی
+                                if hired_count_local > 0:
+                                    raw_main = round(candidates_local / hired_count_local, 1)
+                                    effort_text_persian = f"۱ : {to_persian_num(raw_main)}"
+                                else:
+                                    effort_text_persian = "---"
+
+                                # 4. محاسبه تفکیک جنسیتی (مرد و زن)
+                                m_cand = len(df_emp[df_emp['جنسیت'] == 'مرد'])
+                                f_cand = len(df_emp[df_emp['جنسیت'] == 'زن'])
+                                
+                                m_hired_c = len(hired_df_local[hired_df_local['جنسیت'] == 'مرد'])
+                                f_hired_c = len(hired_df_local[hired_df_local['جنسیت'] == 'زن'])
+
+                                if m_hired_c > 0:
+                                    raw_m = int(m_cand/m_hired_c)
+                                    m_eff_text = f"۱:{to_persian_num(raw_m)}" 
+                                else: m_eff_text = "-"
+                                    
+                                if f_hired_c > 0:
+                                    raw_f = int(f_cand/f_hired_c)
+                                    f_eff_text = f"۱:{to_persian_num(raw_f)}"
+                                else: f_eff_text = "-"
+
+                                # 5. ساخت استایل شیشه‌ای (دقیقاً مشابه بقیه کارت‌ها)
+                                gender_html_efficiency = f"""
+                                <div style="background: rgba(255, 255, 255, 0.6); border-radius: 8px; padding: 6px 10px; display: flex; justify-content: space-between; align-items: center; margin-top: auto; font-size: 14px; color: #444; font-weight: 600; backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.4); font-family: 'B Nazanin', Tahoma, sans-serif !important;">
+                                    <div style="display:flex; align-items:center;">👨 {m_eff_text}</div>
+                                    <div style="width:1px; height:12px; background:#ccc; margin:0 5px;"></div>
+                                    <div style="display:flex; align-items:center;">👩 {f_eff_text}</div>
+                                </div>
+                                """
+                                
+                                # 6. نمایش نهایی کارت
+                                st.markdown(f"""
+                                <div class="gradient-card" style="background: linear-gradient(135deg, #eceff1 0%, #cfd8dc 100%);">
+                                    <div class="watermark-icon">⚖️</div>
+                                    <div class="card-content">
+                                        <div class="g-title">شاخص بازدهی جذب</div>
+                                        <div class="g-value">{effort_text_persian}</div>
+                                        <div class="g-sub" style="font-size: 11px !important; margin-bottom: 5px;">بررسی به ازای ۱ استخدام</div>
+                                        {gender_html_efficiency}
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
                             st.markdown("<div style='margin-bottom: 25px;'></div>", unsafe_allow_html=True)
 
                             # =========================================================
@@ -1585,7 +1644,7 @@ def show_hr_content():
                                             <li>🔸 <b>منبع کیفی:</b> کانال <b>«{top_qual['معرف']}»</b> با نرخ <b>{top_qual['نرخ تبدیل']:.1f}%</b>.</li>
                                         </ul>
                                         <div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-top:10px; color:black;">
-                                            <b>🏆 رده‌بندی کیفیت (Top 5):</b>
+                                            <b>🏆 رده‌بندی کیفیت:</b>
                                             <ul style="list-style-type:none; padding:0; margin:5px 0 0 0;">{top5_html}</ul>
                                         </div>
                                     </div>
